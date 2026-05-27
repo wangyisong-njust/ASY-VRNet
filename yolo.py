@@ -11,6 +11,7 @@ from nets.efficient_vrnet import EfficientVRNet
 from utils.utils import (cvtColor, get_classes, preprocess_input, resize_image,
                          show_config, preprocess_input_radar)
 from utils.utils_bbox import decode_outputs, non_max_suppression
+from utils.radar_utils import load_radar_npz, radar_to_tensor
 
 '''
 训练自己的数据集必看注释！
@@ -27,8 +28,8 @@ class YOLO(object):
         #   验证集损失较低不代表mAP较高，仅代表该权值在验证集上泛化性能较好。
         #   如果出现shape不匹配，同时要注意训练时的model_path和classes_path参数的修改
         # --------------------------------------------------------------------------#
-        "model_path"        : 'logs/last_epoch_weights.pth',
-        "radar_root": "E:/Big_Datasets/water_surface/all-1114/all/VOCradar",
+        "model_path"        : 'logs/best_epoch_weights.pth',
+        "radar_root": "/mnt/f/ASY-VRNet/dataset/VOCradar",
         "classes_path": 'model_data/waterscenes.txt',
         # ---------------------------------------------------------------------#
         #   输入图片的大小，必须为32的倍数。
@@ -37,7 +38,7 @@ class YOLO(object):
         # ---------------------------------------------------------------------#
         #   所使用的YoloX的版本。nano、tiny、s、m、l、x
         # ---------------------------------------------------------------------#
-        "phi": 'nano',
+        "phi": 'l',
         # ---------------------------------------------------------------------#
         #   只有得分大于置信度的预测框会被保留下来
         # ---------------------------------------------------------------------#
@@ -103,6 +104,13 @@ class YOLO(object):
                 self.net = nn.DataParallel(self.net)
                 self.net = self.net.cuda()
 
+    def _device(self):
+        return torch.device('cuda' if self.cuda and torch.cuda.is_available() else 'cpu')
+
+    def _prepare_radar(self, image_id, image):
+        radar_data = load_radar_npz(self.radar_root, image_id, image.size, self.input_shape)
+        return radar_to_tensor(radar_data, device=self._device()).float()
+
     # ---------------------------------------------------#
     #   检测图片
     # ---------------------------------------------------#
@@ -129,9 +137,7 @@ class YOLO(object):
         # ------------------------------#
         #   读取雷达特征map
         # ------------------------------#
-        radar_path = os.path.join(self.radar_root, image_id + '.npz')
-        radar_data = np.load(radar_path)['arr_0']
-        radar_data = torch.from_numpy(preprocess_input_radar(radar_data)).type(torch.FloatTensor).unsqueeze(0)
+        radar_data = self._prepare_radar(image_id, image)
 
         with torch.no_grad():
             images = torch.from_numpy(image_data)
@@ -202,14 +208,20 @@ class YOLO(object):
 
             top, left, bottom, right = box
 
-            top = max(0, np.floor(top).astype('int32'))
-            left = max(0, np.floor(left).astype('int32'))
+            top    = max(0, np.floor(top).astype('int32'))
+            left   = max(0, np.floor(left).astype('int32'))
             bottom = min(image.size[1], np.floor(bottom).astype('int32'))
-            right = min(image.size[0], np.floor(right).astype('int32'))
+            right  = min(image.size[0], np.floor(right).astype('int32'))
+            # ensure valid box
+            top, bottom = min(top, bottom), max(top, bottom)
+            left, right = min(left, right), max(left, right)
+            if bottom <= top or right <= left:
+                continue
 
             label = '{} {:.2f}'.format(predicted_class, score)
             draw = ImageDraw.Draw(image)
-            label_size = draw.textsize(label, font)
+            bbox = draw.textbbox((0, 0), label, font=font)
+            label_size = (bbox[2] - bbox[0], bbox[3] - bbox[1])
             label = label.encode('utf-8')
             print(label, top, left, bottom, right)
 
@@ -219,6 +231,8 @@ class YOLO(object):
                 text_origin = np.array([left, top + 1])
 
             for i in range(thickness):
+                if left + i >= right - i or top + i >= bottom - i:
+                    break
                 draw.rectangle([left + i, top + i, right - i, bottom - i], outline=self.colors[c])
             draw.rectangle([tuple(text_origin), tuple(text_origin + label_size)], fill=self.colors[c])
             draw.text(text_origin, str(label, 'UTF-8'), fill=(0, 0, 0), font=font)
@@ -246,9 +260,7 @@ class YOLO(object):
         # ------------------------------#
         #   读取雷达特征map
         # ------------------------------#
-        radar_path = os.path.join(self.radar_root, image_id + '.npz')
-        radar_data = np.load(radar_path)['arr_0']
-        radar_data = torch.from_numpy(radar_data).type(torch.FloatTensor).unsqueeze(0)
+        radar_data = self._prepare_radar(image_id, image)
 
         with torch.no_grad():
             images = torch.from_numpy(image_data)
@@ -272,7 +284,7 @@ class YOLO(object):
                 # ---------------------------------------------------------#
                 #   将图像输入网络当中进行预测！
                 # ---------------------------------------------------------#
-                outputs, _ = self.net(images)
+                outputs, _ = self.net(images, radar_data)
                 outputs = decode_outputs(outputs, self.input_shape)
                 # ---------------------------------------------------------#
                 #   将预测框进行堆叠，然后进行非极大抑制
@@ -316,9 +328,7 @@ class YOLO(object):
         # ------------------------------#
         #   读取雷达特征map
         # ------------------------------#
-        radar_path = os.path.join(self.radar_root, image_id + '.npz')
-        radar_data = np.load(radar_path)['arr_0']
-        radar_data = torch.from_numpy(radar_data).type(torch.FloatTensor).unsqueeze(0)
+        radar_data = self._prepare_radar(image_id, image)
 
         with torch.no_grad():
             images = torch.from_numpy(image_data)
@@ -409,9 +419,7 @@ class YOLO(object):
         # ------------------------------#
         #   读取雷达特征map
         # ------------------------------#
-        radar_path = os.path.join(self.radar_root, image_id + '.npz')
-        radar_data = np.load(radar_path)['arr_0']
-        radar_data = torch.from_numpy(radar_data).type(torch.FloatTensor).unsqueeze(0)
+        radar_data = self._prepare_radar(image_id, image)
 
         with torch.no_grad():
             images = torch.from_numpy(image_data)

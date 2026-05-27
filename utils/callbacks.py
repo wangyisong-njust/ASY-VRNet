@@ -16,6 +16,7 @@ from tqdm import tqdm
 from .utils import cvtColor, preprocess_input, resize_image
 from .utils_bbox import decode_outputs, non_max_suppression
 from .utils_map import get_coco_map, get_map
+from .radar_utils import load_radar_npz, radar_to_tensor
 
 
 class LossHistory():
@@ -188,19 +189,16 @@ class EvalCallback():
                 # ------------------------------#
                 #   读取雷达特征map
                 # ------------------------------#
-                pattern_string = "\d{10}.\d{5}"
-                pattern = re.compile(pattern_string)  # 查找数字
-                name = pattern.findall(annotation_line)[-1]
-
-                radar_path = os.path.join(self.radar_path, name + '.npz')
-                radar_data = np.load(radar_path)['arr_0']
-                radar_data = torch.from_numpy(radar_data).type(torch.FloatTensor).unsqueeze(0).cuda(self.local_rank)
+                name = os.path.splitext(os.path.basename(annotation_line.split()[0]))[0]
 
                 image_id = os.path.basename(line[0]).split('.')[0]
                 # ------------------------------#
                 #   读取图像并转换成RGB图像
                 # ------------------------------#
                 image = Image.open(line[0])
+                radar_data = load_radar_npz(self.radar_path, name, image.size, self.input_shape)
+                device = torch.device("cuda", self.local_rank) if self.cuda else torch.device("cpu")
+                radar_data = radar_to_tensor(radar_data, device=device)
                 # ------------------------------#
                 #   获得预测框
                 # ------------------------------#

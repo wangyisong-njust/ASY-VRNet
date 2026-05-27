@@ -7,9 +7,9 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.models.layers import DropPath, trunc_normal_
-from timm.models.registry import register_model
-from timm.models.layers.helpers import to_2tuple
+from timm.layers import DropPath, trunc_normal_
+from timm.models import register_model
+from timm.layers import to_2tuple
 from einops import rearrange
 import torch.nn.functional as F
 from backbone.attention_modules.shuffle_attention import ShuffleAttention
@@ -322,7 +322,8 @@ class RadarEnhanceByImage(nn.Module):
         self.initial = initial
         self.radar_in_channels = radar_in_channels
         self.image_in_channels = image_in_channels
-        self.image_attn = ShuffleAttention(channel=self.image_in_channels, G=4)
+        if not initial:
+            self.image_attn = ShuffleAttention(channel=self.image_in_channels, G=4)
         self.channel_attn = eca_block(channel=self.radar_in_channels + self.image_in_channels)
         self.inverse_projection = BaseConv(in_channels=self.radar_in_channels + self.image_in_channels,
                                            out_channels=radar_in_channels, ksize=1, stride=1)

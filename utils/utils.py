@@ -48,9 +48,18 @@ def preprocess_input(image):
 
 
 def preprocess_input_radar(data):
-    _range = np.max(data) - np.min(data)
-    data = (data - np.min(data)) / _range + 0.0000000000001
-    return data
+    data = np.asarray(data, dtype=np.float32)
+    valid = np.isfinite(data)
+    if not valid.any():
+        return np.zeros_like(data, dtype=np.float32)
+    data_min = np.min(data[valid])
+    data_max = np.max(data[valid])
+    data_range = data_max - data_min
+    if data_range < 1e-6:
+        return np.zeros_like(data, dtype=np.float32)
+    data = (data - data_min) / data_range
+    data[~valid] = 0
+    return data.astype(np.float32)
 
 #---------------------------------------------------#
 #   获得学习率

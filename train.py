@@ -13,6 +13,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 from nets.efficient_vrnet import EfficientVRNet
+from load_pretrained import load_coc_pretrained
 from nets.yolo_training import (ModelEMA, YOLOLoss, get_lr_scheduler,
                                 set_optimizer_lr, weights_init)
 from utils.callbacks import LossHistory, EvalCallback
@@ -87,7 +88,7 @@ if __name__ == "__main__":
     # ------------------------------------------------------#
     #   所使用的YoloX的版本。nano、tiny、s、m、l
     # ------------------------------------------------------#
-    phi = 'nano'
+    phi = 'l'  # 使用 'l'(width=1.0) 才与 coc_small 预训练权重维度匹配
     # ------------------------------------------------------#
 
     # ------------------------------------------------------------------#
@@ -146,8 +147,8 @@ if __name__ == "__main__":
     #                       (当Freeze_Train=False时失效)
     # ------------------------------------------------------------------#
     Init_Epoch = 0
-    Freeze_Epoch = 10
-    Freeze_batch_size = 32
+    Freeze_Epoch = 5
+    Freeze_batch_size = 4
     # ------------------------------------------------------------------#
     #   解冻阶段训练参数
     #   此时模型的主干不被冻结了，特征提取网络会发生改变
@@ -158,7 +159,7 @@ if __name__ == "__main__":
     #   Unfreeze_batch_size     模型在解冻后的batch_size
     # ------------------------------------------------------------------#
     UnFreeze_Epoch = 100
-    Unfreeze_batch_size = 16
+    Unfreeze_batch_size = 4
     # ------------------------------------------------------------------#
     #   Freeze_Train    是否进行冻结训练
     #                   默认先冻结主干训练后解冻训练。
@@ -218,7 +219,7 @@ if __name__ == "__main__":
     # ----------------------------------------------------#
     # 雷达feature map路径
     # ----------------------------------------------------#
-    radar_file_path = "E:/Big_Datasets/water_surface/all-1114/all/VOCradar"
+    radar_file_path = "/mnt/f/ASY-VRNet/dataset/VOCradar"
 
     # ----------------------------------------------------#
     #   获得目标检测图片路径和标签
@@ -231,7 +232,7 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------#
     #   VOCdevkit_path  分割数据集路径
     # ------------------------------------------------------------------#
-    VOCdevkit_path = 'E:/Normal_Workspace_Collection/hrnet-pytorch-main/hrnet-pytorch-main/VOCdevkit/VOC2007'
+    VOCdevkit_path = '/mnt/f/ASY-VRNet/dataset/VOCdevkit'
 
     # -----------------------------------------------------#
     #   num_classes     训练自己的数据集必须要修改的
@@ -282,9 +283,9 @@ if __name__ == "__main__":
             print(f"[{os.getpid()}] (rank = {rank}, local_rank = {local_rank}) training...")
             print("Gpu Device Count : ", ngpus_per_node)
     else:
-        device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
-        local_rank = 1
-        rank = 1
+        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        local_rank = 0
+        rank = 0
 
     # ----------------------------------------------------#
     #   获取classes和anchor
@@ -296,6 +297,20 @@ if __name__ == "__main__":
     # ------------------------------------------------------#
     model = EfficientVRNet(num_classes=num_classes, num_seg_classes=num_classes_seg, phi=phi).cuda(local_rank)
     weights_init(model)
+
+    # -----------------------------------------------------------------------#
+    #   加载 ContextCluster-small ImageNet 预训练权重（仅视觉流，雷达流随机初始化）
+    #   要求 phi='l'（width=1.0）与权重维度匹配
+    # -----------------------------------------------------------------------#
+    coc_pretrained_path = 'model_data/coc_small-bs128-lr0.001-wd0.05-dp0.0-distillnone-224/model_best.pth.tar'
+    if os.path.exists(coc_pretrained_path) and phi == 'l':
+        if local_rank == 0 or local_rank == 1:
+            print(f'Loading CoC pretrained weights from {coc_pretrained_path}')
+        load_coc_pretrained(model, coc_pretrained_path)
+    elif phi != 'l':
+        if local_rank == 0 or local_rank == 1:
+            print('[Warning] CoC 预训练权重仅在 phi=\'l\' 时适用，当前跳过。')
+
     if model_path != '':
         # ------------------------------------------------------#
         #   权值文件请看README，百度网盘下载

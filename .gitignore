@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+.idea/
+.vscode/
+venv/
+.venv/
+env/
+
+.temp_map_out/
+.temp_miou_out/
+paper_metrics_out/
+img_crop/
+img_out/
+
+dataset/

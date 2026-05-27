@@ -7,6 +7,7 @@ from PIL import Image
 from torch.utils.data.dataset import Dataset
 import albumentations as A
 from utils.utils import cvtColor, preprocess_input, preprocess_input_radar
+from utils.radar_utils import letterbox_radar_map
 from utils_seg.utils import preprocess_input as preprocess_input_seg
 import random as rd
 import matplotlib.pyplot as plt
@@ -70,10 +71,7 @@ class YoloDataset(Dataset):
     def __getitem__(self, index):
         index = index % self.length
 
-        name = self.annotation_lines[index]
-        pattern_string = "\d{10}.\d{5}"
-        pattern = re.compile(pattern_string)  # 查找数字
-        name = pattern.findall(name)[-1]
+        name = os.path.splitext(os.path.basename(self.annotation_lines[index].split()[0]))[0]
 
         # ---------------------- 分割数据 ------------------- #
         # jpg = Image.open(os.path.join(os.path.join(self.seg_dataset_path, "VOC2007/JPEGImages"), name + ".jpg"))
@@ -108,9 +106,6 @@ class YoloDataset(Dataset):
         # ------------------------------#
         #   雷达特征读取
         # ------------------------------#
-        radar_path = self.radar_root + '/' + id + '.npz'
-        radar_data = np.load(radar_path)['arr_0']
-
         line = annotation_line.split()
         # ------------------------------#
         #   读取图像并转换成RGB图像
@@ -123,6 +118,10 @@ class YoloDataset(Dataset):
         # ------------------------------#
         iw, ih = image.size
         h, w = input_shape
+        radar_path = self.radar_root + '/' + id + '.npz'
+        radar_data = np.load(radar_path)['arr_0']
+        radar_data = letterbox_radar_map(radar_data, image.size, input_shape)
+        radar_data = preprocess_input_radar(radar_data)
         # ------------------------------#
         #   获得预测框
         # ------------------------------#
@@ -455,5 +454,4 @@ def yolo_dataset_collate(batch):
     pngs = torch.from_numpy(np.array(pngs)).long()
     seg_labels = torch.from_numpy(np.array(seg_labels)).type(torch.FloatTensor)
     return images, bboxes, radars, pngs, seg_labels
-
 

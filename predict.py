@@ -6,6 +6,7 @@ import time
 
 import cv2
 import numpy as np
+import os
 from PIL import Image
 
 from yolo import YOLO
@@ -84,7 +85,7 @@ if __name__ == "__main__":
             img = input('Input image filename:')
             try:
                 image = Image.open(img)
-                image_id = img[-20:-4]
+                image_id = os.path.splitext(os.path.basename(img))[0]
             except:
                 print('Open Error! Try again!')
                 continue
@@ -93,6 +94,7 @@ if __name__ == "__main__":
                 r_image.show()
 
     elif mode == "video":
+        raise ValueError("video mode needs a radar npz for every frame; use predict or dir_predict for image/radar pairs.")
         capture = cv2.VideoCapture(video_path)
         if video_save_path != "":
             fourcc = cv2.VideoWriter_fourcc(*'XVID')
@@ -141,7 +143,8 @@ if __name__ == "__main__":
 
     elif mode == "fps":
         img = Image.open(fps_image_path)
-        tact_time = yolo.get_FPS(img, test_interval)
+        image_id = os.path.splitext(os.path.basename(fps_image_path))[0]
+        tact_time = yolo.get_FPS(img, image_id, test_interval)
         print(str(tact_time) + ' seconds, ' + str(1 / tact_time) + 'FPS, @batch_size 1')
 
     elif mode == "dir_predict":
@@ -155,7 +158,8 @@ if __name__ == "__main__":
                     ('.bmp', '.dib', '.png', '.jpg', '.jpeg', '.pbm', '.pgm', '.ppm', '.tif', '.tiff')):
                 image_path = os.path.join(dir_origin_path, img_name)
                 image = Image.open(image_path)
-                r_image = yolo.detect_image(image)
+                image_id = os.path.splitext(os.path.basename(image_path))[0]
+                r_image = yolo.detect_image(image, image_id)
                 if not os.path.exists(dir_save_path):
                     os.makedirs(dir_save_path)
                 r_image.save(os.path.join(dir_save_path, img_name.replace(".jpg", ".png")), quality=95, subsampling=0)
@@ -165,7 +169,7 @@ if __name__ == "__main__":
             img = input('Input image filename:')
             try:
                 image = Image.open(img)
-                image_id = img[-20:-4]
+                image_id = os.path.splitext(os.path.basename(img))[0]
             except:
                 print('Open Error! Try again!')
                 continue

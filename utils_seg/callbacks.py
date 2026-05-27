@@ -17,6 +17,7 @@ from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 from .utils import cvtColor, preprocess_input, resize_image
 from .utils_metrics import compute_mIoU
+from utils.radar_utils import load_radar_npz, radar_to_tensor
 
 
 class LossHistory():
@@ -99,9 +100,8 @@ class EvalCallback():
         self.period = period
         self.radar_path = radar_path
 
-        pattern_string = "\d{10}.\d{5}"
-        pattern = re.compile(pattern_string)  # 查找数字
-        self.image_ids = [pattern.findall(image_id)[-1] for image_id in image_ids]
+        # Extract stem (filename without extension) from each line's image path
+        self.image_ids = [os.path.splitext(os.path.basename(image_id.split()[0]))[0] for image_id in image_ids]
 
         self.mious = [0]
         self.epoches = [0]
@@ -173,15 +173,14 @@ class EvalCallback():
                 # ------------------------------#
                 #   读取雷达特征map
                 # ------------------------------#
-                radar_path = os.path.join(self.radar_path, image_id + '.npz')
-                radar_data = np.load(radar_path)['arr_0']
-                radar_data = torch.from_numpy(radar_data).type(torch.FloatTensor).unsqueeze(0).cuda(self.local_rank)
-
                 # -------------------------------#
                 #   从文件中读取图像
                 # -------------------------------#
                 image_path = os.path.join(self.dataset_path, "VOC2007/JPEGImages/" + image_id + ".jpg")
                 image = Image.open(image_path)
+                radar_data = load_radar_npz(self.radar_path, image_id, image.size, self.input_shape)
+                device = torch.device("cuda", self.local_rank) if self.cuda else torch.device("cpu")
+                radar_data = radar_to_tensor(radar_data, device=device)
                 # ------------------------------#
                 #   获得预测txt
                 # ------------------------------#

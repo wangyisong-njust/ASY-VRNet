@@ -130,7 +130,7 @@ def compute_mIoU(gt_dir, pred_dir, png_name_list, num_classes, name_classes=None
     # -----------------------------------------------------------------#
     print('===> mIoU: ' + str(round(np.nanmean(IoUs) * 100, 2)) + '; mPA: ' + str(
         round(np.nanmean(PA_Recall) * 100, 2)) + '; Accuracy: ' + str(round(per_Accuracy(hist) * 100, 2)))
-    return np.array(hist, np.int), IoUs, PA_Recall, Precision
+    return np.array(hist, int), IoUs, PA_Recall, Precision
 
 
 def adjust_axes(r, t, fig, axes):

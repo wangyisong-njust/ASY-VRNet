@@ -24,7 +24,7 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, loss_history
     val_loss_seg = 0
     val_f_score = 0
 
-    total_loss = 0
+    total_loss_value = 0
     val_total_loss = 0
 
     if local_rank >= 0:
@@ -71,8 +71,7 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, loss_history
             # ----------------------#
             loss_det = yolo_loss(outputs, targets)
 
-            mtl = MultiTaskLossWrapper(task_num=2)
-            total_loss = mtl(loss_seg, loss_det)
+            total_loss = loss_det + loss_seg
 
             with torch.no_grad():
                 train_f_score = f_score(outputs_seg, seg_labels)
@@ -101,9 +100,7 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, loss_history
                 # ----------------------#
                 loss_det = yolo_loss(outputs, targets)
 
-                # mtl = MultiTaskLossWrapper(task_num=2)
-                # total_loss = mtl(loss_seg, loss_det)
-                total_loss = loss_det + 5 * loss_seg
+                total_loss = loss_det + loss_seg
 
                 with torch.no_grad():
                     train_f_score = f_score(outputs_seg, seg_labels)
@@ -119,13 +116,13 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, loss_history
 
         total_loss_det += loss_det.item()
         total_loss_seg += loss_seg.item()
-        total_loss += total_loss_det + total_loss_seg
+        total_loss_value += total_loss.item()
         total_f_score += train_f_score.item()
 
         if local_rank >= 0:
             pbar.set_postfix(**{'detection loss': total_loss_det / (iteration + 1),
                                 'segmentation loss': total_loss_seg / (iteration + 1),
-                                'total loss': total_loss / (iteration + 1),
+                                'total loss': total_loss_value / (iteration + 1),
                                 'f score': total_f_score / (iteration + 1),
                                 'lr': get_lr(optimizer)})
             pbar.update(1)
@@ -203,7 +200,7 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, loss_history
         eval_callback.on_epoch_end(epoch + 1, model_train_eval)
         eval_callback_seg.on_epoch_end(epoch + 1, model_train_eval)
         print('Epoch:' + str(epoch + 1) + '/' + str(Epoch))
-        print('Total Loss: %.3f || Val Loss Det: %.3f  || Val Loss Seg: %.3f' % ((total_loss / epoch_step,
+        print('Total Loss: %.3f || Val Loss Det: %.3f  || Val Loss Seg: %.3f' % ((total_loss_value / epoch_step,
                                                                                   val_loss_det / epoch_step_val,
                                                                                  val_loss_seg / epoch_step_val)))
 
