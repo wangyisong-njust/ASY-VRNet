@@ -56,15 +56,13 @@ default_cfgs = {
 }
 
 
-def data_normal(origin_data):
+def data_normal(origin_data, eps=1e-6):
     d_min = origin_data.min()
-    if d_min < 0:
-        origin_data += torch.abs(d_min)
-        d_min = origin_data.min()
-    d_max = origin_data.max()
-    dst = d_max - d_min
-    norm_data = (origin_data - d_min).true_divide(dst)
-    return norm_data
+    shifted = origin_data - d_min if d_min < 0 else origin_data
+    shifted_min = shifted.min()
+    shifted_max = shifted.max()
+    denom = (shifted_max - shifted_min).clamp_min(eps)
+    return (shifted - shifted_min) / denom
 
 
 def shuffle_channels(x, groups=2):
@@ -439,14 +437,14 @@ class VRCoC(nn.Module):
         # register positional information buffer of image.
         range_w = torch.arange(0, img_w, step=1)/(img_w-1.0)
         range_h = torch.arange(0, img_h, step=1)/(img_h-1.0)
-        fea_pos = torch.stack(torch.meshgrid(range_w, range_h), dim = -1).float()
+        fea_pos = torch.stack(torch.meshgrid(range_w, range_h, indexing="ij"), dim=-1).float()
         fea_pos = fea_pos-0.5
         self.register_buffer('fea_pos', fea_pos)
 
         # register positional information buffer of radar map.
         range_w_r = torch.arange(0, img_w, step=1) / (img_w - 1.0)
         range_h_r = torch.arange(0, img_h, step=1) / (img_h - 1.0)
-        fea_pos_r = torch.stack(torch.meshgrid(range_w_r, range_h_r), dim=-1).float()
+        fea_pos_r = torch.stack(torch.meshgrid(range_w_r, range_h_r, indexing="ij"), dim=-1).float()
         fea_pos_r = fea_pos_r - 0.5
         self.register_buffer('fea_pos_r', fea_pos_r)
 

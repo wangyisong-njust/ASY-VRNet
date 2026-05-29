@@ -207,6 +207,13 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, loss_history
     if local_rank == 0:
         pbar.close()
         print('Finish Validation')
+        current_val_det = val_loss_det / epoch_step_val
+        current_val_seg = val_loss_seg / epoch_step_val
+        current_val_total = current_val_det + current_val_seg
+        previous_val_totals = [
+            det_loss + seg_loss
+            for det_loss, seg_loss in zip(loss_history.val_loss, loss_history_seg.val_loss)
+        ]
         loss_history.append_loss(epoch + 1, total_loss_det / epoch_step, val_loss_det / epoch_step_val)
         loss_history_seg.append_loss(epoch + 1, total_loss_seg / epoch_step, val_loss_seg / epoch_step_val)
         eval_callback.on_epoch_end(epoch + 1, model_train_eval)
@@ -226,9 +233,9 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, loss_history
 
         if (epoch + 1) % save_period == 0 or epoch + 1 == Epoch:
             torch.save(save_state_dict, os.path.join(save_dir, "ep%03d-loss%.3f-det_val_loss%.3f-seg_val_loss%.3f.pth" % (
-            epoch + 1, val_total_loss / epoch_step, val_loss_det / epoch_step_val, val_loss_seg / epoch_step_val)))
+            epoch + 1, current_val_total, current_val_det, current_val_seg)))
 
-        if len(loss_history.val_loss) <= 1 or (val_total_loss / epoch_step_val) <= min(loss_history.val_loss) + min(loss_history_seg.val_loss):
+        if not previous_val_totals or current_val_total <= min(previous_val_totals):
             print('Save best model to best_epoch_weights.pth')
             torch.save(save_state_dict, os.path.join(save_dir, "best_epoch_weights.pth"))
 
