@@ -14,6 +14,18 @@ from utils_seg.utils_metrics import f_score
 from utils.multitaskloss import MultiTaskLossWrapper
 
 
+def get_loss_balancer(model_train):
+    module = model_train.module if hasattr(model_train, "module") else model_train
+    return getattr(module, "loss_balancer", None)
+
+
+def combine_task_losses(loss_det, loss_seg, model_train):
+    loss_balancer = get_loss_balancer(model_train)
+    if loss_balancer is None:
+        return loss_det + loss_seg
+    return loss_balancer(loss_seg, loss_det)
+
+
 def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, loss_history_seg, eval_callback, eval_callback_seg, optimizer, epoch, epoch_step,
                   epoch_step_val, gen, gen_val, Epoch, cuda, fp16, scaler, save_period, save_dir, dice_loss, focal_loss, cls_weights, num_class_seg, local_rank=0):
     total_loss_det = 0
@@ -71,7 +83,7 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, loss_history
             # ----------------------#
             loss_det = yolo_loss(outputs, targets)
 
-            total_loss = loss_det + loss_seg
+            total_loss = combine_task_losses(loss_det, loss_seg, model_train)
 
             with torch.no_grad():
                 train_f_score = f_score(outputs_seg, seg_labels)
@@ -100,7 +112,7 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, loss_history
                 # ----------------------#
                 loss_det = yolo_loss(outputs, targets)
 
-                total_loss = loss_det + loss_seg
+                total_loss = combine_task_losses(loss_det, loss_seg, model_train)
 
                 with torch.no_grad():
                     train_f_score = f_score(outputs_seg, seg_labels)

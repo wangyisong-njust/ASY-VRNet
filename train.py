@@ -117,6 +117,18 @@ if __name__ == "__main__":
     # ------------------------------------------------------#
     phi = os.environ.get("ASY_PHI", 'l')  # 使用 'l'(width=1.0) 才与 coc_small 预训练权重维度匹配
     # ------------------------------------------------------#
+    #   Innovation switches. Defaults reproduce the baseline path.
+    #   ASY_FUSION_MODE: baseline | reliability
+    #   ASY_TASK_LOSS: sum | uncertainty
+    # ------------------------------------------------------#
+    radar_in_channels = env_int("ASY_RADAR_CHANNELS", 4)
+    fusion_mode = os.environ.get("ASY_FUSION_MODE", "baseline").lower()
+    radar_dropout = env_float("ASY_RADAR_DROPOUT", 0.0)
+    task_loss_mode = os.environ.get("ASY_TASK_LOSS", "sum").lower()
+    if fusion_mode not in {"baseline", "reliability"}:
+        raise ValueError(f"Unsupported ASY_FUSION_MODE={fusion_mode!r}")
+    if task_loss_mode not in {"sum", "uncertainty"}:
+        raise ValueError(f"Unsupported ASY_TASK_LOSS={task_loss_mode!r}")
 
     # ------------------------------------------------------------------#
     #   mosaic              马赛克数据增强。
@@ -323,7 +335,15 @@ if __name__ == "__main__":
     # ------------------------------------------------------#
     #   创建yolo模型
     # ------------------------------------------------------#
-    model = EfficientVRNet(num_classes=num_classes, num_seg_classes=num_classes_seg, phi=phi).cuda(local_rank)
+    model = EfficientVRNet(
+        num_classes=num_classes,
+        num_seg_classes=num_classes_seg,
+        phi=phi,
+        radar_in_channels=radar_in_channels,
+        fusion_mode=fusion_mode,
+        radar_dropout=radar_dropout,
+        task_loss_mode=task_loss_mode,
+    ).cuda(local_rank)
     weights_init(model)
 
     # -----------------------------------------------------------------------#
@@ -449,7 +469,9 @@ if __name__ == "__main__":
         Freeze_batch_size=Freeze_batch_size, Unfreeze_batch_size=Unfreeze_batch_size, Freeze_Train=Freeze_Train, \
         Init_lr=Init_lr, Min_lr=Min_lr, optimizer_type=optimizer_type, momentum=momentum,
         lr_decay_type=lr_decay_type, \
-        save_period=save_period, save_dir=save_dir, num_workers=num_workers, num_train=num_train, num_val=num_val
+        save_period=save_period, save_dir=save_dir, num_workers=num_workers, num_train=num_train, num_val=num_val,
+        radar_in_channels=radar_in_channels, fusion_mode=fusion_mode,
+        radar_dropout=radar_dropout, task_loss_mode=task_loss_mode
     )
     # ---------------------------------------------------------#
     #   总训练世代指的是遍历全部数据的总次数

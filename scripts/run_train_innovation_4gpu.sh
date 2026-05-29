@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0,1,2,3}
+export PYTHONNOUSERSITE=1
+export PYTHON=${PYTHON:-/home/kaixin/anaconda3/envs/PDPP/bin/python}
+
+export EXP_NAME=${EXP_NAME:-innovation_reliability_loss_5frames_320}
+
+export ASY_DISTRIBUTED=${ASY_DISTRIBUTED:-1}
+export ASY_SYNC_BN=${ASY_SYNC_BN:-1}
+export ASY_FP16=${ASY_FP16:-1}
+
+export ASY_INPUT_SHAPE=${ASY_INPUT_SHAPE:-320,320}
+export ASY_BATCH_SIZE=${ASY_BATCH_SIZE:-64}
+export ASY_NUM_WORKERS=${ASY_NUM_WORKERS:-8}
+export ASY_UNFREEZE_EPOCH=${ASY_UNFREEZE_EPOCH:-300}
+export ASY_SAVE_PERIOD=${ASY_SAVE_PERIOD:-20}
+
+export ASY_INIT_LR=${ASY_INIT_LR:-0.01}
+export ASY_LR_DECAY=${ASY_LR_DECAY:-cos}
+export ASY_OPTIMIZER=${ASY_OPTIMIZER:-sgd}
+export ASY_FREEZE_TRAIN=${ASY_FREEZE_TRAIN:-0}
+
+export ASY_EVAL=${ASY_EVAL:-0}
+export ASY_EVAL_PERIOD=${ASY_EVAL_PERIOD:-10}
+
+export ASY_SAVE_DIR=${ASY_SAVE_DIR:-logs_${EXP_NAME}}
+export ASY_SAVE_DIR_SEG=${ASY_SAVE_DIR_SEG:-logs_seg_${EXP_NAME}}
+export ASY_VOCDEVKIT=${ASY_VOCDEVKIT:-/home/kaixin/code/ASY-VRNet/dataset/VOCdevkit}
+export ASY_RADAR_ROOT=${ASY_RADAR_ROOT:-/home/kaixin/code/ASY-VRNet/dataset/VOCradar_5_frames}
+
+# Innovation switches. Set each one back to its baseline value for ablations.
+export ASY_RADAR_CHANNELS=${ASY_RADAR_CHANNELS:-4}
+export ASY_FUSION_MODE=${ASY_FUSION_MODE:-reliability}
+export ASY_RADAR_DROPOUT=${ASY_RADAR_DROPOUT:-0.05}
+export ASY_TASK_LOSS=${ASY_TASK_LOSS:-uncertainty}
+
+mkdir -p "${ASY_SAVE_DIR}" "${ASY_SAVE_DIR_SEG}"
+stamp=$(date +%Y%m%d_%H%M%S)
+
+"$PYTHON" -m torch.distributed.run --nproc_per_node=4 train.py 2>&1 | tee "${ASY_SAVE_DIR}/train_${stamp}.log"

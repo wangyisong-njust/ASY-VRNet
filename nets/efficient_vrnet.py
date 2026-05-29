@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from neck.coc_fpn_dual import CoCFpnDual
 from head.decouplehead import DecoupleHead
+from utils.multitaskloss import MultiTaskLossWrapper
 from torchinfo import summary
 from thop import profile
 from thop import clever_format
@@ -11,15 +12,24 @@ import time
 
 
 class EfficientVRNet(nn.Module):
-    def __init__(self, num_classes, num_seg_classes,  phi):
+    def __init__(self, num_classes, num_seg_classes, phi,
+                 radar_in_channels=4, fusion_mode="baseline",
+                 radar_dropout=0.0, task_loss_mode="sum"):
         super().__init__()
         depth_dict = {'nano': 0.33, 'tiny': 0.33, 's' : 0.33, 'm' : 0.67, 'l' : 1.00}
         width_dict = {'nano': 0.25, 'tiny': 0.375, 's' : 0.50, 'm' : 0.75, 'l' : 1.00}
         depth, width = depth_dict[phi], width_dict[phi]
 
-        self.backbone = CoCFpnDual(width=width, num_seg_class=num_seg_classes)
+        self.backbone = CoCFpnDual(
+            width=width,
+            num_seg_class=num_seg_classes,
+            radar_in_channels=radar_in_channels,
+            fusion_mode=fusion_mode,
+            radar_dropout=radar_dropout,
+        )
 
         self.head = DecoupleHead(num_classes, width, depthwise=True)
+        self.loss_balancer = MultiTaskLossWrapper(2) if task_loss_mode == "uncertainty" else None
 
     def forward(self, x, x_radar):
         fpn_outs, seg_outputs = self.backbone.forward(x, x_radar)

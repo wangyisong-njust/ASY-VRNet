@@ -301,35 +301,65 @@ def basic_blocks(dim, index, layers,
 
 
 class ImageEnhanceByRadar(nn.Module):
-    def __init__(self, radar_in_channels, image_in_channels):
+    def __init__(self, radar_in_channels, image_in_channels, fusion_mode="baseline"):
         super(ImageEnhanceByRadar, self).__init__()
         self.radar_in_channels = radar_in_channels
         self.image_in_channels = image_in_channels
+        self.fusion_mode = fusion_mode
         self.radar_projection = BaseConv(in_channels=self.radar_in_channels, out_channels=self.image_in_channels,
                                          ksize=3, stride=1)
+        if fusion_mode == "reliability":
+            hidden_channels = max(8, min(self.image_in_channels, 64))
+            self.reliability_gate = nn.Sequential(
+                nn.Conv2d(self.image_in_channels + self.radar_in_channels, hidden_channels, kernel_size=1),
+                nn.BatchNorm2d(hidden_channels),
+                nn.SiLU(inplace=True),
+                nn.Conv2d(hidden_channels, self.image_in_channels, kernel_size=1),
+                nn.Sigmoid(),
+            )
+        else:
+            self.reliability_gate = None
         self.norm = nn.BatchNorm2d(self.image_in_channels)
 
     def forward(self, image_map, radar_map):
         key_points_normal = self.radar_projection(radar_map)
         key_image_map = (1 + data_normal(key_points_normal)) * image_map
         key_image_map = self.norm(key_image_map)
+        if self.reliability_gate is not None:
+            gate = self.reliability_gate(torch.cat([image_map, radar_map], dim=1))
+            key_image_map = image_map + gate * (key_image_map - image_map)
         return key_image_map
 
 
 class RadarEnhanceByImage(nn.Module):
-    def __init__(self, radar_in_channels, image_in_channels, initial=False):
+    def __init__(self, radar_in_channels, image_in_channels, initial=False, fusion_mode="baseline"):
         super(RadarEnhanceByImage, self).__init__()
         self.initial = initial
         self.radar_in_channels = radar_in_channels
         self.image_in_channels = image_in_channels
+        self.fusion_mode = fusion_mode
         if not initial:
             self.image_attn = ShuffleAttention(channel=self.image_in_channels, G=4)
         self.channel_attn = eca_block(channel=self.radar_in_channels + self.image_in_channels)
         self.inverse_projection = BaseConv(in_channels=self.radar_in_channels + self.image_in_channels,
                                            out_channels=radar_in_channels, ksize=1, stride=1)
+        if fusion_mode == "reliability":
+            hidden_channels = max(8, min(self.radar_in_channels, 64))
+            self.reliability_gate = nn.Sequential(
+                nn.Conv2d(self.image_in_channels + self.radar_in_channels, hidden_channels, kernel_size=1),
+                nn.BatchNorm2d(hidden_channels),
+                nn.SiLU(inplace=True),
+                nn.Conv2d(hidden_channels, self.radar_in_channels, kernel_size=1),
+                nn.Sigmoid(),
+            )
+        else:
+            self.reliability_gate = None
         self.norm = nn.BatchNorm2d(self.radar_in_channels)
 
     def forward(self, image_map, radar_map):
+        gate_input = None
+        if self.reliability_gate is not None:
+            gate_input = torch.cat([image_map, radar_map], dim=1)
         if self.initial:
             # ------------------- concatenate maps and shuffle with channel attention ---------------------- #
             image_radar_maps = torch.cat([image_map, radar_map], axis=1)
@@ -356,6 +386,10 @@ class RadarEnhanceByImage(nn.Module):
             image_radar_maps = image_radar_maps + radar_map
             image_radar_maps = self.norm(image_radar_maps)
             # ---------------------------------------------------------------------------------------------- #
+
+        if self.reliability_gate is not None:
+            gate = self.reliability_gate(gate_input)
+            image_radar_maps = radar_map + gate * (image_radar_maps - radar_map)
 
         return image_radar_maps
 
@@ -391,6 +425,9 @@ class VRCoC(nn.Module):
                  img_w=512,img_h=512,
                  proposal_w=[2,2,2,2], proposal_h=[2,2,2,2], fold_w=[8,4,2,1], fold_h=[8,4,2,1],
                  heads=[2,4,6,8], head_dim=[16,16,32,32],
+                 radar_in_channels=4,
+                 fusion_mode="baseline",
+                 radar_dropout=0.0,
                  **kwargs):
 
         super().__init__()
@@ -416,11 +453,14 @@ class VRCoC(nn.Module):
         self.image_initial = PointRecuder(patch_size=1, stride=1, padding=0,
             in_chans=3, embed_dim=3)
 
+        self.radar_dropout = nn.Dropout2d(p=radar_dropout) if radar_dropout > 0 else nn.Identity()
         self.radar_initial = PointRecuder(patch_size=1, stride=1, padding=0,
-            in_chans=4, embed_dim=4)
+            in_chans=radar_in_channels, embed_dim=4)
 
-        self.radar_enhance_by_image1 = RadarEnhanceByImage(image_in_channels=3, radar_in_channels=4, initial=True)
-        self.image_enhance_by_radar1 = ImageEnhanceByRadar(image_in_channels=3, radar_in_channels=4)
+        self.radar_enhance_by_image1 = RadarEnhanceByImage(
+            image_in_channels=3, radar_in_channels=4, initial=True, fusion_mode=fusion_mode)
+        self.image_enhance_by_radar1 = ImageEnhanceByRadar(
+            image_in_channels=3, radar_in_channels=4, fusion_mode=fusion_mode)
 
         self.patch_embed = PointRecuder(
             patch_size=in_patch_size, stride=in_stride, padding=in_pad,
@@ -460,10 +500,12 @@ class VRCoC(nn.Module):
                                  )
             network_radar.append(stage_radar)
 
-            image_enhance = ImageEnhanceByRadar(image_in_channels=embed_dims[i], radar_in_channels=embed_dims[i])
+            image_enhance = ImageEnhanceByRadar(
+                image_in_channels=embed_dims[i], radar_in_channels=embed_dims[i], fusion_mode=fusion_mode)
             network.append(image_enhance)
 
-            radar_enhance = RadarEnhanceByImage(image_in_channels=embed_dims[i], radar_in_channels=embed_dims[i])
+            radar_enhance = RadarEnhanceByImage(
+                image_in_channels=embed_dims[i], radar_in_channels=embed_dims[i], fusion_mode=fusion_mode)
             network_radar.append(radar_enhance)
 
             if i >= len(layers) - 1:
@@ -582,6 +624,7 @@ class VRCoC(nn.Module):
 
     def forward_embeddings(self, x, x_radar):
         x = self.image_initial(x)
+        x_radar = self.radar_dropout(x_radar)
         x_radar = self.radar_initial(x_radar)
 
         x = self.image_enhance_by_radar1(x, x_radar)
