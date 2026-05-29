@@ -573,6 +573,13 @@ class VRCoC(nn.Module):
         self.head = nn.Linear(
             self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
+    def get_position_map(self, x):
+        _, _, h, w = x.shape
+        range_h = torch.linspace(0, 1, steps=h, device=x.device, dtype=x.dtype)
+        range_w = torch.linspace(0, 1, steps=w, device=x.device, dtype=x.dtype)
+        pos = torch.stack(torch.meshgrid(range_h, range_w, indexing="ij"), dim=0)
+        return (pos - 0.5).unsqueeze(0).expand(x.shape[0], -1, -1, -1)
+
     def forward_embeddings(self, x, x_radar):
         x = self.image_initial(x)
         x_radar = self.radar_initial(x_radar)
@@ -580,10 +587,10 @@ class VRCoC(nn.Module):
         x = self.image_enhance_by_radar1(x, x_radar)
         x_radar = self.radar_enhance_by_image1(x, x_radar)
 
-        pos = self.fea_pos.permute(2, 0, 1).unsqueeze(dim=0).expand(x.shape[0], -1, -1, -1)
+        pos = self.get_position_map(x)
         x = self.patch_embed(torch.cat([x, pos], dim=1))
 
-        pos_radar = self.fea_pos.permute(2, 0, 1).unsqueeze(dim=0).expand(x_radar.shape[0], -1, -1, -1)
+        pos_radar = self.get_position_map(x_radar)
         x_radar = self.patch_embed_radar(torch.cat([x_radar, pos_radar], dim=1))
         return x, x_radar
 

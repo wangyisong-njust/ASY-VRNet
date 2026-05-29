@@ -15,3 +15,17 @@ img_crop/
 img_out/
 
 dataset/
+downloads/
+
+# Local training/evaluation runtime outputs.
+*.log
+logs_paper_baseline_*/
+logs_seg_paper_baseline_*/
+logs/loss_*/
+logs_seg/loss_*/
+logs/ep*-loss*.pth
+
+# Keep final paper metric summaries, but ignore bulky per-sample outputs.
+paper_metrics_best/*
+!paper_metrics_best/paper_metrics.json
+!paper_metrics_best/paper_metrics.csv

@@ -28,6 +28,33 @@ from utils_seg.utils_fit import fit_one_epoch as fit_one_epoch_seg
 from utils_seg.callbacks import LossHistory as LossHistory_seg
 
 
+def env_bool(name, default):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.lower() in {"1", "true", "yes", "y", "on"}
+
+
+def env_int(name, default):
+    value = os.environ.get(name)
+    return default if value is None else int(value)
+
+
+def env_float(name, default):
+    value = os.environ.get(name)
+    return default if value is None else float(value)
+
+
+def env_shape(name, default):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    parts = [int(part) for part in value.replace(",", " ").split()]
+    if len(parts) != 2:
+        raise ValueError(f"{name} must contain two integers, got {value!r}")
+    return parts
+
+
 if __name__ == "__main__":
     # ---------------------------------#
     #   Cuda    是否使用Cuda
@@ -45,21 +72,21 @@ if __name__ == "__main__":
     #       设置            distributed = True
     #       在终端中输入    CUDA_VISIBLE_DEVICES=0,1 python -m torch.distributed.launch --nproc_per_node=2 train.py
     # ---------------------------------------------------------------------#
-    distributed = False
+    distributed = env_bool("ASY_DISTRIBUTED", int(os.environ.get("WORLD_SIZE", "1")) > 1)
     # ---------------------------------------------------------------------#
     #   sync_bn     是否使用sync_bn，DDP模式多卡可用
     # ---------------------------------------------------------------------#
-    sync_bn = False
+    sync_bn = env_bool("ASY_SYNC_BN", False)
     # ---------------------------------------------------------------------#
     #   fp16        是否使用混合精度训练
     #               可减少约一半的显存、需要pytorch1.7.1以上
     # ---------------------------------------------------------------------#
-    fp16 = True
+    fp16 = env_bool("ASY_FP16", True)
     # ---------------------------------------------------------------------#
     #   classes_path    指向model_data下的txt，与自己训练的数据集相关
     #                   训练前一定要修改classes_path，使其对应自己的数据集
     # ---------------------------------------------------------------------#
-    classes_path = 'model_data/waterscenes.txt'
+    classes_path = os.environ.get("ASY_CLASSES_PATH", 'model_data/waterscenes.txt')
     # ----------------------------------------------------------------------------------------------------------------------------#
     #   权值文件的下载请看README，可以通过网盘下载。模型的 预训练权重 对不同数据集是通用的，因为特征是通用的。
     #   模型的 预训练权重 比较重要的部分是 主干特征提取网络的权值部分，用于进行特征提取。
@@ -80,15 +107,15 @@ if __name__ == "__main__":
     #      可以设置mosaic=True，直接随机初始化参数开始训练，但得到的效果仍然不如有预训练的情况。（像COCO这样的大数据集可以这样做）
     #   2、了解imagenet数据集，首先训练分类模型，获得网络的主干部分权值，分类模型的 主干部分 和该模型通用，基于此进行训练。
     # ----------------------------------------------------------------------------------------------------------------------------#
-    model_path = ''
+    model_path = os.environ.get("ASY_MODEL_PATH", '')
     # ------------------------------------------------------#
     #   input_shape     输入的shape大小，一定要是32的倍数
     # ------------------------------------------------------#
-    input_shape = [512, 512]
+    input_shape = env_shape("ASY_INPUT_SHAPE", [512, 512])
     # ------------------------------------------------------#
     #   所使用的YoloX的版本。nano、tiny、s、m、l
     # ------------------------------------------------------#
-    phi = 'l'  # 使用 'l'(width=1.0) 才与 coc_small 预训练权重维度匹配
+    phi = os.environ.get("ASY_PHI", 'l')  # 使用 'l'(width=1.0) 才与 coc_small 预训练权重维度匹配
     # ------------------------------------------------------#
 
     # ------------------------------------------------------------------#
@@ -106,11 +133,11 @@ if __name__ == "__main__":
     #
     #   余弦退火算法的参数放到下面的lr_decay_type中设置
     # ------------------------------------------------------------------#
-    mosaic = False
-    mosaic_prob = 0.5
-    mixup = False
-    mixup_prob = 0.5
-    special_aug_ratio = 0.6
+    mosaic = env_bool("ASY_MOSAIC", False)
+    mosaic_prob = env_float("ASY_MOSAIC_PROB", 0.5)
+    mixup = env_bool("ASY_MIXUP", False)
+    mixup_prob = env_float("ASY_MIXUP_PROB", 0.5)
+    special_aug_ratio = env_float("ASY_SPECIAL_AUG_RATIO", 0.6)
 
     # ----------------------------------------------------------------------------------------------------------------------------#
     #   训练分为两个阶段，分别是冻结阶段和解冻阶段。设置冻结阶段是为了满足机器性能不足的同学的训练需求。
@@ -146,9 +173,9 @@ if __name__ == "__main__":
     #   Freeze_batch_size   模型冻结训练的batch_size
     #                       (当Freeze_Train=False时失效)
     # ------------------------------------------------------------------#
-    Init_Epoch = 0
-    Freeze_Epoch = 5
-    Freeze_batch_size = 4
+    Init_Epoch = env_int("ASY_INIT_EPOCH", 0)
+    Freeze_Epoch = env_int("ASY_FREEZE_EPOCH", 5)
+    Freeze_batch_size = env_int("ASY_FREEZE_BATCH_SIZE", 4)
     # ------------------------------------------------------------------#
     #   解冻阶段训练参数
     #   此时模型的主干不被冻结了，特征提取网络会发生改变
@@ -158,13 +185,13 @@ if __name__ == "__main__":
     #                           Adam可以使用相对较小的UnFreeze_Epoch
     #   Unfreeze_batch_size     模型在解冻后的batch_size
     # ------------------------------------------------------------------#
-    UnFreeze_Epoch = 100
-    Unfreeze_batch_size = 4
+    UnFreeze_Epoch = env_int("ASY_UNFREEZE_EPOCH", 100)
+    Unfreeze_batch_size = env_int("ASY_BATCH_SIZE", 4)
     # ------------------------------------------------------------------#
     #   Freeze_Train    是否进行冻结训练
     #                   默认先冻结主干训练后解冻训练。
     # ------------------------------------------------------------------#
-    Freeze_Train = False
+    Freeze_Train = env_bool("ASY_FREEZE_TRAIN", False)
 
     # ------------------------------------------------------------------#
     #   其它训练参数：学习率、优化器、学习率下降有关
@@ -173,7 +200,7 @@ if __name__ == "__main__":
     #   Init_lr         模型的最大学习率
     #   Min_lr          模型的最小学习率，默认为最大学习率的0.01
     # ------------------------------------------------------------------#
-    Init_lr = 1e-2
+    Init_lr = env_float("ASY_INIT_LR", 1e-2)
     Min_lr = Init_lr * 0.01
     # ------------------------------------------------------------------#
     #   optimizer_type  使用到的优化器种类，可选的有adam、sgd
@@ -183,21 +210,21 @@ if __name__ == "__main__":
     #   weight_decay    权值衰减，可防止过拟合
     #                   adam会导致weight_decay错误，使用adam时建议设置为0。
     # ------------------------------------------------------------------#
-    optimizer_type = "sgd"
-    momentum = 0.937
-    weight_decay = 5e-4
+    optimizer_type = os.environ.get("ASY_OPTIMIZER", "sgd")
+    momentum = env_float("ASY_MOMENTUM", 0.937)
+    weight_decay = env_float("ASY_WEIGHT_DECAY", 5e-4)
     # ------------------------------------------------------------------#
     #   lr_decay_type   使用到的学习率下降方式，可选的有step、cos
     # ------------------------------------------------------------------#
-    lr_decay_type = "cos"
+    lr_decay_type = os.environ.get("ASY_LR_DECAY", "cos")
     # ------------------------------------------------------------------#
     #   save_period     多少个epoch保存一次权值
     # ------------------------------------------------------------------#
-    save_period = 10
+    save_period = env_int("ASY_SAVE_PERIOD", 10)
     # ------------------------------------------------------------------#
     #   save_dir        权值与日志文件保存的文件夹
     # ------------------------------------------------------------------#
-    save_dir = 'logs'
+    save_dir = os.environ.get("ASY_SAVE_DIR", 'logs')
     # ------------------------------------------------------------------#
     #   eval_flag       是否在训练时进行评估，评估对象为验证集
     #                   安装pycocotools库后，评估体验更佳。
@@ -207,38 +234,38 @@ if __name__ == "__main__":
     #   （一）此处获得的mAP为验证集的mAP。
     #   （二）此处设置评估参数较为保守，目的是加快评估速度。
     # ------------------------------------------------------------------#
-    eval_flag = True
-    eval_period = 5
+    eval_flag = env_bool("ASY_EVAL", True)
+    eval_period = env_int("ASY_EVAL_PERIOD", 5)
     # ------------------------------------------------------------------#
     #   num_workers     用于设置是否使用多线程读取数据
     #                   开启后会加快数据读取速度，但是会占用更多内存
     #                   内存较小的电脑可以设置为2或者0
     # ------------------------------------------------------------------#
-    num_workers = 2
+    num_workers = env_int("ASY_NUM_WORKERS", 2)
 
     # ----------------------------------------------------#
     # 雷达feature map路径
     # ----------------------------------------------------#
-    radar_file_path = "/mnt/f/ASY-VRNet/dataset/VOCradar"
+    radar_file_path = os.environ.get("ASY_RADAR_ROOT", "/mnt/f/ASY-VRNet/dataset/VOCradar")
 
     # ----------------------------------------------------#
     #   获得目标检测图片路径和标签
     # ----------------------------------------------------#
-    train_annotation_path = '2007_train.txt'
-    val_annotation_path = '2007_val.txt'
+    train_annotation_path = os.environ.get("ASY_TRAIN_TXT", '2007_train.txt')
+    val_annotation_path = os.environ.get("ASY_VAL_TXT", '2007_val.txt')
 
     # ============================ segmentation hyperparameters ============================= #
 
     # ------------------------------------------------------------------#
     #   VOCdevkit_path  分割数据集路径
     # ------------------------------------------------------------------#
-    VOCdevkit_path = '/mnt/f/ASY-VRNet/dataset/VOCdevkit'
+    VOCdevkit_path = os.environ.get("ASY_VOCDEVKIT", '/mnt/f/ASY-VRNet/dataset/VOCdevkit')
 
     # -----------------------------------------------------#
     #   num_classes     训练自己的数据集必须要修改的
     #                   自己需要的分类个数+1，如2+1
     # -----------------------------------------------------#
-    num_classes_seg = 9
+    num_classes_seg = env_int("ASY_SEG_CLASSES", 9)
 
     #   建议选项：
     #   种类少（几类）时，设置为True
@@ -263,7 +290,7 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------#
     #   save_dir_seg        分割权值与日志文件保存的文件夹
     # ------------------------------------------------------------------#
-    save_dir_seg = 'logs_seg'
+    save_dir_seg = os.environ.get("ASY_SAVE_DIR_SEG", 'logs_seg')
 
     # ======================================================================================= #
 
@@ -279,6 +306,7 @@ if __name__ == "__main__":
         local_rank = int(os.environ["LOCAL_RANK"])
         rank = int(os.environ["RANK"])
         device = torch.device("cuda", local_rank)
+        torch.cuda.set_device(local_rank)
         if local_rank == 0:
             print(f"[{os.getpid()}] (rank = {rank}, local_rank = {local_rank}) training...")
             print("Gpu Device Count : ", ngpus_per_node)
@@ -350,8 +378,12 @@ if __name__ == "__main__":
     time_str = datetime.datetime.strftime(datetime.datetime.now(), '%Y_%m_%d_%H_%M_%S')
     log_dir = os.path.join(save_dir, "loss_" + str(time_str))
     log_dir_seg = os.path.join(save_dir_seg, "loss_" + str(time_str))
-    loss_history = LossHistory(log_dir, model, input_shape=input_shape)
-    loss_history_seg = LossHistory_seg(log_dir_seg, model, input_shape=input_shape)
+    if local_rank == 0:
+        loss_history = LossHistory(log_dir, model, input_shape=input_shape)
+        loss_history_seg = LossHistory_seg(log_dir_seg, model, input_shape=input_shape)
+    else:
+        loss_history = None
+        loss_history_seg = None
 
     # ------------------------------------------------------------------#
     #   torch 1.2不支持amp，建议使用torch 1.7.1及以上正确使用fp16
@@ -565,11 +597,16 @@ if __name__ == "__main__":
         # ----------------------#
         #   记录eval的map曲线
         # ----------------------#
-        eval_callback = EvalCallback(model, input_shape, class_names, num_classes, val_lines, log_dir, Cuda, \
-                                     eval_flag=eval_flag, period=eval_period, radar_path=radar_file_path, local_rank=local_rank)
-        eval_callback_seg = EvalCallback_seg(model, input_shape, num_classes_seg, val_lines, VOCdevkit_path,
-                                             log_dir_seg, Cuda, eval_flag=eval_flag, period=eval_period,
-                                             radar_path=radar_file_path, local_rank=local_rank)
+        if local_rank == 0:
+            eval_callback = EvalCallback(model, input_shape, class_names, num_classes, val_lines, log_dir, Cuda, \
+                                         eval_flag=eval_flag, period=eval_period, radar_path=radar_file_path,
+                                         local_rank=local_rank)
+            eval_callback_seg = EvalCallback_seg(model, input_shape, num_classes_seg, val_lines, VOCdevkit_path,
+                                                 log_dir_seg, Cuda, eval_flag=eval_flag, period=eval_period,
+                                                 radar_path=radar_file_path, local_rank=local_rank)
+        else:
+            eval_callback = None
+            eval_callback_seg = None
 
         # ---------------------------------------#
         #   开始模型训练123
@@ -636,6 +673,6 @@ if __name__ == "__main__":
             if distributed:
                 dist.barrier()
 
-        if local_rank >= 1:
+        if local_rank == 0:
             loss_history.writer.close()
             loss_history_seg.writer.close()

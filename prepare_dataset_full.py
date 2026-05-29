@@ -31,16 +31,15 @@ import pandas as pd
 from tqdm import tqdm
 
 # ====================== 配置 ======================
-FULL_DIR     = Path("/mnt/f/ASY-VRNet/dataset/WaterScenes_Full")
-OUTPUT_DIR   = Path("/mnt/f/ASY-VRNet/dataset")
+FULL_DIR     = Path(os.environ.get("WATERSCENES_FULL_DIR", "/mnt/f/ASY-VRNet/dataset/WaterScenes_Full"))
+OUTPUT_DIR   = Path(os.environ.get("ASY_DATASET_DIR", "/mnt/f/ASY-VRNet/dataset"))
 VOC_DIR      = OUTPUT_DIR / "VOCdevkit" / "VOC2007"
 RADAR_DIR    = OUTPUT_DIR / "VOCradar"
-PROJECT_ROOT = Path("/mnt/f/ASY-VRNet")
+PROJECT_ROOT = Path(os.environ.get("ASY_PROJECT_ROOT", Path(__file__).resolve().parent))
 
 IMG_W, IMG_H   = 1920, 1080
 FEAT_W, FEAT_H = 512, 512
-VAL_RATIO      = 0.2
-MAX_SAMPLES    = 5000   # 取前 N 个有效样本（全部用则设为 None）
+MAX_SAMPLES    = int(os.environ.get("ASY_MAX_SAMPLES", "5000"))   # 全部用可传 0
 RANDOM_SEED    = 42
 
 CLASSES = ['pier', 'buoy', 'sailor', 'ship', 'boat', 'vessel', 'kayak']
@@ -56,6 +55,12 @@ def make_dirs():
         RADAR_DIR,
     ]:
         d.mkdir(parents=True, exist_ok=True)
+
+
+def read_split(path: Path):
+    if not path.exists():
+        return None
+    return [Path(line.strip().split()[0]).stem for line in path.read_text().splitlines() if line.strip()]
 
 
 def yolo_to_voc_xml(txt_path: Path, stem: str) -> str:
@@ -153,11 +158,26 @@ def main():
 
     print(f"四路数据齐全: {len(valid)} 个样本")
 
-    if MAX_SAMPLES and len(valid) > MAX_SAMPLES:
+    valid_set = set(valid)
+    official_train = read_split(FULL_DIR / "train.txt")
+    official_val = read_split(FULL_DIR / "val.txt")
+    if official_train and official_val:
+        train_stems = [stem for stem in official_train if stem in valid_set]
+        val_stems = [stem for stem in official_val if stem in valid_set]
+        valid = sorted(set(train_stems + val_stems))
+        print(f"使用官方划分: train={len(train_stems)}, val={len(val_stems)}")
+    else:
+        if MAX_SAMPLES > 0 and len(valid) > MAX_SAMPLES:
+            random.seed(RANDOM_SEED)
+            random.shuffle(valid)
+            valid = sorted(valid[:MAX_SAMPLES])
+            print(f"随机选取 {len(valid)} 个样本")
         random.seed(RANDOM_SEED)
-        random.shuffle(valid)
-        valid = sorted(valid[:MAX_SAMPLES])
-        print(f"随机选取 {len(valid)} 个样本")
+        shuffled = valid[:]
+        random.shuffle(shuffled)
+        n_val = max(1, int(len(shuffled) * 0.2))
+        val_stems = sorted(shuffled[:n_val])
+        train_stems = sorted(shuffled[n_val:])
 
     # -------- 处理每个样本 --------
     print("处理图像、标注、分割、雷达...")
@@ -177,13 +197,13 @@ def main():
         # 雷达 CSV → NPZ
         csv_to_npz(rad_dir / (stem + ".csv"), RADAR_DIR / (stem + ".npz"))
 
-    # -------- 划分 train/val --------
-    random.seed(RANDOM_SEED)
-    shuffled = valid[:]
-    random.shuffle(shuffled)
-    n_val        = max(1, int(len(shuffled) * VAL_RATIO))
-    val_stems    = sorted(shuffled[:n_val])
-    train_stems  = sorted(shuffled[n_val:])
+    if MAX_SAMPLES > 0 and len(valid) > MAX_SAMPLES:
+        random.seed(RANDOM_SEED)
+        sampled = set(random.sample(valid, MAX_SAMPLES))
+        train_stems = [stem for stem in train_stems if stem in sampled]
+        val_stems = [stem for stem in val_stems if stem in sampled]
+        valid = sorted(sampled)
+        print(f"按官方划分抽样 {len(valid)} 个样本: train={len(train_stems)}, val={len(val_stems)}")
 
     (VOC_DIR / "ImageSets" / "Main" / "train.txt").write_text("\n".join(train_stems) + "\n")
     (VOC_DIR / "ImageSets" / "Main" / "val.txt").write_text(  "\n".join(val_stems)   + "\n")
