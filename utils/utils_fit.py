@@ -169,7 +169,7 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, loss_history
             # ----------------------#
             #   前向传播
             # ----------------------#
-            outputs, outputs_seg = model_train(images, radars)
+            outputs, outputs_seg = model_train_eval(images, radars)
 
             if focal_loss:
                 loss_seg = Focal_Loss(outputs_seg, pngs, weights, num_classes=num_class_seg)
