@@ -433,6 +433,8 @@ if __name__ == "__main__":
             model_train = model_train.cuda(local_rank)
             model_train = torch.nn.parallel.DistributedDataParallel(model_train, device_ids=[local_rank],
                                                                     find_unused_parameters=True)
+            if task_loss_mode == "uncertainty" and hasattr(model_train, "_set_static_graph"):
+                model_train._set_static_graph()
         else:
             # model_train = torch.nn.DataParallel(model)
             cudnn.benchmark = True
