@@ -145,8 +145,12 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, loss_history
         print('Start Validation')
         pbar = tqdm(total=epoch_step_val, desc=f'Epoch {epoch + 1}/{Epoch}', postfix=dict, mininterval=0.3)
 
+    val_weights = torch.from_numpy(cls_weights)
+    if cuda:
+        val_weights = val_weights.cuda(local_rank)
+
     if ema:
-        model_train_eval = ema.ema
+        model_train_eval = ema.ema.eval()
     else:
         model_train_eval = model_train.eval()
 
@@ -161,7 +165,6 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, loss_history
                 radars = radars.cuda(local_rank)
                 pngs = pngs.cuda(local_rank)
                 seg_labels = seg_labels.cuda(local_rank)
-                weights = weights.cuda(local_rank)
             # ----------------------#
             #   清零梯度
             # ----------------------#
@@ -172,9 +175,9 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, loss_history
             outputs, outputs_seg = model_train_eval(images, radars)
 
             if focal_loss:
-                loss_seg = Focal_Loss(outputs_seg, pngs, weights, num_classes=num_class_seg)
+                loss_seg = Focal_Loss(outputs_seg, pngs, val_weights, num_classes=num_class_seg)
             else:
-                loss_seg = CE_Loss(outputs_seg, pngs, weights, num_classes=num_class_seg)
+                loss_seg = CE_Loss(outputs_seg, pngs, val_weights, num_classes=num_class_seg)
 
             if dice_loss:
                 main_dice = Dice_loss(outputs_seg, seg_labels)

@@ -534,6 +534,10 @@ if __name__ == "__main__":
                 pg0.append(v.weight)
             elif hasattr(v, "weight") and isinstance(v.weight, nn.Parameter):
                 pg1.append(v.weight)
+        grouped_param_ids = {id(param) for group in (pg0, pg1, pg2) for param in group}
+        for _, param in model.named_parameters():
+            if id(param) not in grouped_param_ids:
+                pg0.append(param)
         optimizer = {
             'adam': optim.Adam(pg0, Init_lr_fit, betas=(momentum, 0.999)),
             'sgd': optim.SGD(pg0, Init_lr_fit, momentum=momentum, nesterov=True)

@@ -147,6 +147,7 @@ class EvalCallback():
                                           nms_thres=self.nms_iou)
 
             if results[0] is None:
+                f.close()
                 return
 
             top_label = np.array(results[0][:, 6], dtype='int32')

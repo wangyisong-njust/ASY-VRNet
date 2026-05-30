@@ -35,6 +35,11 @@ class YOLO(object):
         #   输入图片的大小，必须为32的倍数。
         # ---------------------------------------------------------------------#
         "input_shape": [512, 512],
+        "num_seg_classes": 9,
+        "radar_in_channels": int(os.environ.get("ASY_RADAR_CHANNELS", "4")),
+        "fusion_mode": os.environ.get("ASY_FUSION_MODE", "baseline"),
+        "radar_dropout": float(os.environ.get("ASY_RADAR_DROPOUT", "0.0")),
+        "task_loss_mode": os.environ.get("ASY_TASK_LOSS", "sum"),
         # ---------------------------------------------------------------------#
         #   所使用的YoloX的版本。nano、tiny、s、m、l、x
         # ---------------------------------------------------------------------#
@@ -74,6 +79,10 @@ class YOLO(object):
         for name, value in kwargs.items():
             setattr(self, name, value)
             self._defaults[name] = value
+        self.radar_in_channels = int(self.radar_in_channels)
+        self.radar_dropout = float(self.radar_dropout)
+        self.fusion_mode = str(self.fusion_mode).lower()
+        self.task_loss_mode = str(self.task_loss_mode).lower()
 
             # ---------------------------------------------------#
         #   获得种类和先验框的数量
@@ -94,7 +103,15 @@ class YOLO(object):
     #   生成模型
     # ---------------------------------------------------#
     def generate(self, onnx=False):
-        self.net = EfficientVRNet(num_classes=self.num_classes, num_seg_classes=9, phi=self.phi)
+        self.net = EfficientVRNet(
+            num_classes=self.num_classes,
+            num_seg_classes=self.num_seg_classes,
+            phi=self.phi,
+            radar_in_channels=self.radar_in_channels,
+            fusion_mode=self.fusion_mode,
+            radar_dropout=self.radar_dropout,
+            task_loss_mode=self.task_loss_mode,
+        )
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.net.load_state_dict(torch.load(self.model_path, map_location=device))
         self.net = self.net.eval()
@@ -364,14 +381,15 @@ class YOLO(object):
         import onnx
         self.generate(onnx=True)
 
-        im = torch.zeros(1, 3, *self.input_shape).to('cpu')  # image size(1, 3, 512, 512) BCHW
-        input_layer_names = ["images"]
-        output_layer_names = ["output"]
+        im = torch.zeros(1, 3, *self.input_shape).to('cpu')
+        radar = torch.zeros(1, self.radar_in_channels, *self.input_shape).to('cpu')
+        input_layer_names = ["images", "radars"]
+        output_layer_names = ["det_s", "det_m", "det_l", "segmentation"]
 
         # Export the model
         print(f'Starting export with onnx {onnx.__version__}.')
         torch.onnx.export(self.net,
-                          im,
+                          (im, radar),
                           f=model_path,
                           verbose=False,
                           opset_version=12,
@@ -438,6 +456,7 @@ class YOLO(object):
                                           nms_thres=self.nms_iou)
 
             if results[0] is None:
+                f.close()
                 return
 
             top_label = np.array(results[0][:, 6], dtype='int32')

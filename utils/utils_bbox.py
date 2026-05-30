@@ -50,7 +50,11 @@ def decode_outputs(outputs, input_shape, local_rank=0):
         #---------------------------#
         #   根据特征层的高宽生成网格点
         #---------------------------#   
-        grid_y, grid_x  = torch.meshgrid([torch.arange(h), torch.arange(w)])
+        grid_y, grid_x  = torch.meshgrid(
+            torch.arange(h, device=outputs.device),
+            torch.arange(w, device=outputs.device),
+            indexing="ij",
+        )
         #---------------------------#
         #   1, 6400, 2
         #   1, 1600, 2
@@ -60,7 +64,7 @@ def decode_outputs(outputs, input_shape, local_rank=0):
         shape           = grid.shape[:2]
 
         grids.append(grid)
-        strides.append(torch.full((shape[0], shape[1], 1), input_shape[0] / h))
+        strides.append(torch.full((shape[0], shape[1], 1), input_shape[0] / h, device=outputs.device))
     #---------------------------#
     #   将网格点堆叠到一起
     #   1, 6400, 2
@@ -69,8 +73,8 @@ def decode_outputs(outputs, input_shape, local_rank=0):
     #
     #   1, 8400, 2
     #---------------------------#
-    grids               = torch.cat(grids, dim=1).type(outputs.type()).cuda(local_rank)
-    strides             = torch.cat(strides, dim=1).type(outputs.type()).cuda(local_rank)
+    grids               = torch.cat(grids, dim=1).type_as(outputs)
+    strides             = torch.cat(strides, dim=1).type_as(outputs)
     #------------------------#
     #   根据网格点进行解码
     #------------------------#

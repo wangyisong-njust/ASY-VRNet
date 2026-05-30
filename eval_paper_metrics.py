@@ -52,6 +52,10 @@ def parse_args():
     parser.add_argument("--nms_iou", type=float, default=0.5)
     parser.add_argument("--input_shape", type=int, nargs=2, default=[320, 320])
     parser.add_argument("--num_seg_classes", type=int, default=9)
+    parser.add_argument("--radar_channels", type=int, default=int(os.environ.get("ASY_RADAR_CHANNELS", "4")))
+    parser.add_argument("--fusion_mode", default=os.environ.get("ASY_FUSION_MODE", "baseline"))
+    parser.add_argument("--radar_dropout", type=float, default=float(os.environ.get("ASY_RADAR_DROPOUT", "0.0")))
+    parser.add_argument("--task_loss", default=os.environ.get("ASY_TASK_LOSS", "sum"))
     parser.add_argument("--small_area", type=float, default=32 * 32)
     parser.add_argument("--disable_subset_metrics", action="store_true")
     parser.add_argument("--cuda", action="store_true", default=True)
@@ -256,6 +260,11 @@ def main():
         classes_path=args.classes_path,
         radar_root=args.radar_root,
         input_shape=args.input_shape,
+        num_seg_classes=args.num_seg_classes,
+        radar_in_channels=args.radar_channels,
+        fusion_mode=args.fusion_mode,
+        radar_dropout=args.radar_dropout,
+        task_loss_mode=args.task_loss,
         phi=args.phi,
         confidence=args.confidence,
         nms_iou=args.nms_iou,
