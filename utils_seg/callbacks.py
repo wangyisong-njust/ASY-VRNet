@@ -84,7 +84,8 @@ class LossHistory():
 
 class EvalCallback():
     def __init__(self, net, input_shape, num_classes, image_ids, dataset_path, log_dir, cuda, local_rank, radar_path, \
-                 miou_out_path=".temp_miou_out", eval_flag=True, period=1, radar_align_mode="letterbox"):
+                 miou_out_path=".temp_miou_out", eval_flag=True, period=1, radar_align_mode="letterbox",
+                 radar_normalize=False):
         super(EvalCallback, self).__init__()
 
         self.net = net
@@ -100,6 +101,7 @@ class EvalCallback():
         self.period = period
         self.radar_path = radar_path
         self.radar_align_mode = radar_align_mode
+        self.radar_normalize = radar_normalize
 
         # Extract stem (filename without extension) from each line's image path
         self.image_ids = [os.path.splitext(os.path.basename(image_id.split()[0]))[0] for image_id in image_ids]
@@ -184,6 +186,7 @@ class EvalCallback():
                     image_id,
                     image.size,
                     self.input_shape,
+                    normalize=self.radar_normalize,
                     align_mode=self.radar_align_mode,
                 )
                 device = torch.device("cuda", self.local_rank) if self.cuda else torch.device("cpu")

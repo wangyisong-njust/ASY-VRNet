@@ -45,7 +45,7 @@ transform_fog = A.Compose(
 class YoloDataset(Dataset):
     def __init__(self, annotation_lines, input_shape, num_classes, num_classes_seg, epoch_length, radar_root, \
                  mosaic, mixup, mosaic_prob, mixup_prob, seg_dataset_path, train, special_aug_ratio=0.7,
-                 radar_align_mode="letterbox"):
+                 radar_align_mode="letterbox", radar_normalize=False):
         super(YoloDataset, self).__init__()
 
         # ------------------------- 通用 --------------------------- #
@@ -74,6 +74,7 @@ class YoloDataset(Dataset):
         # ------------------------- 雷达 --------------------------- #
         self.radar_root = radar_root
         self.radar_align_mode = radar_align_mode
+        self.radar_normalize = radar_normalize
         # ---------------------------------------------------------- #
 
     def __len__(self):
@@ -134,6 +135,7 @@ class YoloDataset(Dataset):
             id,
             image.size,
             input_shape,
+            normalize=self.radar_normalize,
             align_mode=self.radar_align_mode,
         )
         # ------------------------------#

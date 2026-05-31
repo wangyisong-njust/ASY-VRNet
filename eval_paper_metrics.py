@@ -22,6 +22,13 @@ from yolo import YOLO
 PROJECT_ROOT = Path(__file__).resolve().parent
 
 
+def env_bool(name, default):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.lower() in {"1", "true", "yes", "y", "on"}
+
+
 def resolve_path(path):
     path = Path(path)
     return path if path.is_absolute() else PROJECT_ROOT / path
@@ -63,6 +70,8 @@ def parse_args():
     parser.add_argument("--num_seg_classes", type=int, default=9)
     parser.add_argument("--radar_channels", type=int, default=int(os.environ.get("ASY_RADAR_CHANNELS", "4")))
     parser.add_argument("--radar_align_mode", default=os.environ.get("ASY_RADAR_ALIGN_MODE", "letterbox"))
+    parser.add_argument("--radar_normalize", action="store_true", default=env_bool("ASY_RADAR_NORMALIZE", False))
+    parser.add_argument("--no_radar_normalize", action="store_false", dest="radar_normalize")
     parser.add_argument("--fusion_mode", default=os.environ.get("ASY_FUSION_MODE", "baseline"))
     parser.add_argument("--radar_dropout", type=float, default=float(os.environ.get("ASY_RADAR_DROPOUT", "0.0")))
     parser.add_argument("--task_loss", default=os.environ.get("ASY_TASK_LOSS", "sum"))
@@ -97,6 +106,7 @@ def save_segmentation_png(model, image, image_id, args, pred_dir):
         image_id,
         image.size,
         args.input_shape,
+        normalize=args.radar_normalize,
         align_mode=args.radar_align_mode,
     )
     device = torch.device("cuda" if args.cuda and torch.cuda.is_available() else "cpu")
@@ -284,6 +294,7 @@ def main():
         num_seg_classes=args.num_seg_classes,
         radar_in_channels=args.radar_channels,
         radar_align_mode=args.radar_align_mode,
+        radar_normalize=args.radar_normalize,
         fusion_mode=args.fusion_mode,
         radar_dropout=args.radar_dropout,
         task_loss_mode=args.task_loss,

@@ -7,19 +7,24 @@ import torch
 
 def normalize_radar(data, eps=1e-6):
     data = np.asarray(data, dtype=np.float32)
-    valid = np.isfinite(data)
-    if not valid.any():
-        return np.zeros_like(data, dtype=np.float32)
+    normalized = np.zeros_like(data, dtype=np.float32)
 
-    data_min = np.min(data[valid])
-    data_max = np.max(data[valid])
-    denom = data_max - data_min
-    if denom < eps:
-        return np.zeros_like(data, dtype=np.float32)
+    for channel_idx in range(data.shape[0]):
+        channel = data[channel_idx]
+        valid = np.isfinite(channel) & (channel != 0)
+        if not valid.any():
+            continue
 
-    data = (data - data_min) / denom
-    data[~valid] = 0
-    return data.astype(np.float32)
+        values = channel[valid]
+        data_min = np.min(values)
+        data_max = np.max(values)
+        denom = data_max - data_min
+        if denom < eps:
+            normalized[channel_idx, valid] = 1.0
+        else:
+            normalized[channel_idx, valid] = (values - data_min) / denom
+
+    return normalized.astype(np.float32)
 
 
 def resize_radar_map(radar_data, input_shape):
@@ -73,7 +78,7 @@ def align_radar_map(radar_data, image_size, input_shape, align_mode="letterbox")
     raise ValueError(f"Unsupported radar align mode: {align_mode!r}")
 
 
-def load_radar_npz(radar_root, image_id, image_size, input_shape, normalize=True, align_mode="letterbox"):
+def load_radar_npz(radar_root, image_id, image_size, input_shape, normalize=False, align_mode="letterbox"):
     radar_path = os.path.join(radar_root, image_id + ".npz")
     radar_data = np.load(radar_path)["arr_0"]
     radar_data = align_radar_map(radar_data, image_size, input_shape, align_mode=align_mode)

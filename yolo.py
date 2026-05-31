@@ -22,6 +22,13 @@ from utils.radar_utils import load_radar_npz, radar_to_tensor
 PROJECT_ROOT = Path(__file__).resolve().parent
 
 
+def env_bool(name, default):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.lower() in {"1", "true", "yes", "y", "on"}
+
+
 class YOLO(object):
     _defaults = {
         # --------------------------------------------------------------------------#
@@ -42,6 +49,7 @@ class YOLO(object):
         "num_seg_classes": 9,
         "radar_in_channels": int(os.environ.get("ASY_RADAR_CHANNELS", "4")),
         "radar_align_mode": os.environ.get("ASY_RADAR_ALIGN_MODE", "letterbox"),
+        "radar_normalize": env_bool("ASY_RADAR_NORMALIZE", False),
         "fusion_mode": os.environ.get("ASY_FUSION_MODE", "baseline"),
         "radar_dropout": float(os.environ.get("ASY_RADAR_DROPOUT", "0.0")),
         "task_loss_mode": os.environ.get("ASY_TASK_LOSS", "sum"),
@@ -86,6 +94,7 @@ class YOLO(object):
             self._defaults[name] = value
         self.radar_in_channels = int(self.radar_in_channels)
         self.radar_align_mode = str(self.radar_align_mode).lower()
+        self.radar_normalize = bool(self.radar_normalize)
         self.radar_dropout = float(self.radar_dropout)
         self.fusion_mode = str(self.fusion_mode).lower()
         self.task_loss_mode = str(self.task_loss_mode).lower()
@@ -146,6 +155,7 @@ class YOLO(object):
             image_id,
             image.size,
             self.input_shape,
+            normalize=self.radar_normalize,
             align_mode=self.radar_align_mode,
         )
         return radar_to_tensor(radar_data, device=self._device()).float()

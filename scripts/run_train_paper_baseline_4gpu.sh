@@ -5,13 +5,17 @@ cd "$(dirname "$0")/.."
 
 PROJECT_ROOT=$(pwd)
 if [[ -z "${PYTHON:-}" ]]; then
-    PYTHON=$(command -v python3 || command -v python || true)
+    if [[ -x "${HOME}/anaconda3/envs/PDPP/bin/python" ]]; then
+        PYTHON="${HOME}/anaconda3/envs/PDPP/bin/python"
+    else
+        PYTHON=$(command -v python3 || command -v python || true)
+    fi
 fi
 if [[ -z "${PYTHON}" ]]; then
     echo "No Python interpreter found. Set PYTHON=/path/to/python before running."
     exit 1
 fi
-EXP_NAME=${EXP_NAME:-paper_repro_phi_nano_5frames_bs16_100e_320}
+EXP_NAME=${EXP_NAME:-paper_repro_phi_nano_5frames_bs16_100e_320_official_radarnorm0}
 MASTER_PORT=${MASTER_PORT:-29500}
 
 export PYTHONNOUSERSITE=${PYTHONNOUSERSITE:-1}
@@ -46,6 +50,7 @@ export ASY_FUSION_MODE=${ASY_FUSION_MODE:-baseline}
 export ASY_RADAR_DROPOUT=${ASY_RADAR_DROPOUT:-0}
 export ASY_RADAR_CHANNELS=${ASY_RADAR_CHANNELS:-4}
 export ASY_RADAR_ALIGN_MODE=${ASY_RADAR_ALIGN_MODE:-letterbox}
+export ASY_RADAR_NORMALIZE=${ASY_RADAR_NORMALIZE:-0}
 
 mkdir -p "${ASY_SAVE_DIR}" "${ASY_SAVE_DIR_SEG}"
 

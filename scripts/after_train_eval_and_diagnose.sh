@@ -5,7 +5,11 @@ cd "$(dirname "$0")/.."
 
 PROJECT_ROOT=$(pwd)
 if [[ -z "${PYTHON:-}" ]]; then
-    PYTHON=$(command -v python3 || command -v python || true)
+    if [[ -x "${HOME}/anaconda3/envs/PDPP/bin/python" ]]; then
+        PYTHON="${HOME}/anaconda3/envs/PDPP/bin/python"
+    else
+        PYTHON=$(command -v python3 || command -v python || true)
+    fi
 fi
 if [[ -z "${PYTHON}" ]]; then
     echo "No Python interpreter found. Set PYTHON=/path/to/python before running."
@@ -26,6 +30,7 @@ INPUT_W=${INPUT_W:-320}
 PHI=${PHI:-${ASY_PHI:-l}}
 RADAR_CHANNELS=${RADAR_CHANNELS:-4}
 RADAR_ALIGN_MODE=${RADAR_ALIGN_MODE:-${ASY_RADAR_ALIGN_MODE:-letterbox}}
+RADAR_NORMALIZE=${RADAR_NORMALIZE:-${ASY_RADAR_NORMALIZE:-0}}
 FUSION_MODE=${FUSION_MODE:-baseline}
 TASK_LOSS=${TASK_LOSS:-uncertainty}
 CONFIDENCE=${CONFIDENCE:-0.05}
@@ -39,6 +44,7 @@ export ASY_VOCDEVKIT="${VOCDEVKIT}"
 export ASY_INFO_CSV="${INFO_CSV}"
 export ASY_RADAR_CHANNELS="${RADAR_CHANNELS}"
 export ASY_RADAR_ALIGN_MODE="${RADAR_ALIGN_MODE}"
+export ASY_RADAR_NORMALIZE="${RADAR_NORMALIZE}"
 export ASY_FUSION_MODE="${FUSION_MODE}"
 export ASY_RADAR_DROPOUT=${ASY_RADAR_DROPOUT:-0}
 export ASY_TASK_LOSS="${TASK_LOSS}"
@@ -67,6 +73,10 @@ run_eval() {
     local name=$1
     local weight=$2
     local out_dir=$3
+    local radar_normalize_arg=--no_radar_normalize
+    if [[ "${RADAR_NORMALIZE}" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]]; then
+        radar_normalize_arg=--radar_normalize
+    fi
 
     if [[ ! -f "${weight}" ]]; then
         log "Missing checkpoint: ${weight}"
@@ -87,6 +97,7 @@ run_eval() {
         --num_seg_classes 9 \
         --radar_channels "${RADAR_CHANNELS}" \
         --radar_align_mode "${RADAR_ALIGN_MODE}" \
+        "${radar_normalize_arg}" \
         --fusion_mode "${FUSION_MODE}" \
         --task_loss "${TASK_LOSS}" \
         --confidence "${CONFIDENCE}" \

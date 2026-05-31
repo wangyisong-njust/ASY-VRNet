@@ -93,7 +93,8 @@ class LossHistory():
 class EvalCallback():
     def __init__(self, net, input_shape, class_names, num_classes, val_lines, log_dir, cuda, local_rank, radar_path, \
                  map_out_path=".temp_map_out", max_boxes=100, confidence=0.05, nms_iou=0.5, letterbox_image=True,
-                 MINOVERLAP=0.5, eval_flag=True, period=1, radar_align_mode="letterbox"):
+                 MINOVERLAP=0.5, eval_flag=True, period=1, radar_align_mode="letterbox",
+                 radar_normalize=False):
         super(EvalCallback, self).__init__()
 
         self.net = net
@@ -114,6 +115,7 @@ class EvalCallback():
         self.period = period
         self.radar_path = radar_path
         self.radar_align_mode = radar_align_mode
+        self.radar_normalize = radar_normalize
 
         self.maps = [0]
         self.epoches = [0]
@@ -212,6 +214,7 @@ class EvalCallback():
                     name,
                     image.size,
                     self.input_shape,
+                    normalize=self.radar_normalize,
                     align_mode=self.radar_align_mode,
                 )
                 device = torch.device("cuda", self.local_rank) if self.cuda else torch.device("cpu")

@@ -47,6 +47,7 @@ export ASY_FUSION_MODE=${ASY_FUSION_MODE:-baseline}
 export ASY_RADAR_DROPOUT=${ASY_RADAR_DROPOUT:-0}
 export ASY_RADAR_CHANNELS=${ASY_RADAR_CHANNELS:-4}
 export ASY_RADAR_ALIGN_MODE=${ASY_RADAR_ALIGN_MODE:-letterbox}
+export ASY_RADAR_NORMALIZE=${ASY_RADAR_NORMALIZE:-0}
 
 # Slightly emphasize drivable-area pixels to close the mIoU_d gap while keeping
 # object classes unchanged.

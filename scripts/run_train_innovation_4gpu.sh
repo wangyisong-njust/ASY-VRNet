@@ -44,6 +44,7 @@ export ASY_SAVE_DIR_SEG=${ASY_SAVE_DIR_SEG:-logs_seg_${EXP_NAME}}
 export ASY_VOCDEVKIT=${ASY_VOCDEVKIT:-${PROJECT_ROOT}/dataset/VOCdevkit}
 export ASY_RADAR_ROOT=${ASY_RADAR_ROOT:-${PROJECT_ROOT}/dataset/VOCradar_5_frames}
 export ASY_RADAR_ALIGN_MODE=${ASY_RADAR_ALIGN_MODE:-letterbox}
+export ASY_RADAR_NORMALIZE=${ASY_RADAR_NORMALIZE:-0}
 
 # Innovation switches. Set each one back to its baseline value for ablations.
 export ASY_RADAR_CHANNELS=${ASY_RADAR_CHANNELS:-4}
