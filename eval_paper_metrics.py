@@ -3,6 +3,7 @@ import csv
 import json
 import os
 import shutil
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -16,6 +17,14 @@ from utils.utils import cvtColor, get_classes, preprocess_input, resize_image
 from utils.utils_map import get_coco_map
 from utils_seg.utils_metrics import compute_mIoU
 from yolo import YOLO
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent
+
+
+def resolve_path(path):
+    path = Path(path)
+    return path if path.is_absolute() else PROJECT_ROOT / path
 
 
 COCO_STAT_NAMES = [
@@ -53,6 +62,7 @@ def parse_args():
     parser.add_argument("--input_shape", type=int, nargs=2, default=[320, 320])
     parser.add_argument("--num_seg_classes", type=int, default=9)
     parser.add_argument("--radar_channels", type=int, default=int(os.environ.get("ASY_RADAR_CHANNELS", "4")))
+    parser.add_argument("--radar_align_mode", default=os.environ.get("ASY_RADAR_ALIGN_MODE", "letterbox"))
     parser.add_argument("--fusion_mode", default=os.environ.get("ASY_FUSION_MODE", "baseline"))
     parser.add_argument("--radar_dropout", type=float, default=float(os.environ.get("ASY_RADAR_DROPOUT", "0.0")))
     parser.add_argument("--task_loss", default=os.environ.get("ASY_TASK_LOSS", "sum"))
@@ -70,7 +80,7 @@ def write_detection_gt(annotation_line, class_names, gt_dir):
         for box in line[1:]:
             left, top, right, bottom, cls_id = map(int, box.split(","))
             f.write(f"{class_names[cls_id]} {left} {top} {right} {bottom}\n")
-    return image_id, line[0]
+    return image_id, str(resolve_path(line[0]))
 
 
 def save_segmentation_png(model, image, image_id, args, pred_dir):
@@ -82,7 +92,13 @@ def save_segmentation_png(model, image, image_id, args, pred_dir):
         0,
     )
 
-    radar_data = load_radar_npz(args.radar_root, image_id, image.size, args.input_shape)
+    radar_data = load_radar_npz(
+        args.radar_root,
+        image_id,
+        image.size,
+        args.input_shape,
+        align_mode=args.radar_align_mode,
+    )
     device = torch.device("cuda" if args.cuda and torch.cuda.is_available() else "cpu")
     images = torch.from_numpy(image_data).to(device)
     radar = radar_to_tensor(radar_data, device=device)
@@ -127,7 +143,7 @@ def coco_stats_to_metrics(coco_stats, prefix=""):
 
 def has_small_gt_object(annotation_line, input_shape, small_area):
     line = annotation_line.split()
-    image_path = line[0]
+    image_path = resolve_path(line[0])
     if len(line) <= 1:
         return False
 
@@ -242,6 +258,11 @@ def write_metrics(out_dir, coco_stats, seg_metrics, subset_metrics=None):
 
 def main():
     args = parse_args()
+    args.val_txt = str(resolve_path(args.val_txt))
+    args.classes_path = str(resolve_path(args.classes_path))
+    args.radar_root = str(resolve_path(args.radar_root))
+    args.vocdevkit_path = str(resolve_path(args.vocdevkit_path))
+    args.info_csv = str(resolve_path(args.info_csv))
     class_names, num_classes = get_classes(args.classes_path)
     with open(args.val_txt, encoding="utf-8") as f:
         val_lines = [line.strip() for line in f if line.strip()]
@@ -262,6 +283,7 @@ def main():
         input_shape=args.input_shape,
         num_seg_classes=args.num_seg_classes,
         radar_in_channels=args.radar_channels,
+        radar_align_mode=args.radar_align_mode,
         fusion_mode=args.fusion_mode,
         radar_dropout=args.radar_dropout,
         task_loss_mode=args.task_loss,

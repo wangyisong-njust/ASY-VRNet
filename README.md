@@ -20,10 +20,10 @@ Radar: Ocuii Imaging Radar
 > For object detection, make two files, one for training and another for test. There are two ways to complete this. \
 > 1. Make two txt files, one for training and another for test. Two files are with the same format: 
 > In one line, there are two parts, an image path and objects:  
-> **image path**: E:/Big_Datasets/water_surface/all-1114/all/VOCdevkit/VOC2007/JPEGImages/1664091257.87023.jpg  
+> **image path**: dataset/VOCdevkit/VOC2007/JPEGImages/1664091257.87023.jpg  
 > **object 1** (the first four numbers are the bounding box and the last is the category): 1131,430,1152,473,0   
 > **object 2**: 920,425,937,451,0   
-> Therefore, each line is like this: E:/Big_Datasets/water_surface/all-1114/all/VOCdevkit/VOC2007/JPEGImages/1664091257.87023.jpg 1131,430,1152,473,0 920,425,937,451,0 
+> Therefore, each line is like this: dataset/VOCdevkit/VOC2007/JPEGImages/1664091257.87023.jpg 1131,430,1152,473,0 920,425,937,451,0 
 > 2. Organize the files in VOC format in one folder like this: \
 > VOCdevkit \
 > -VOC2007  \
@@ -64,4 +64,3 @@ The only difference between them is the format.
 > enter these files see the details by annotations in the files
 
 If have any questions, put them in Issues ---
-

@@ -31,11 +31,11 @@ import pandas as pd
 from tqdm import tqdm
 
 # ====================== 配置 ======================
-FULL_DIR     = Path(os.environ.get("WATERSCENES_FULL_DIR", "/mnt/f/ASY-VRNet/dataset/WaterScenes_Full"))
-OUTPUT_DIR   = Path(os.environ.get("ASY_DATASET_DIR", "/mnt/f/ASY-VRNet/dataset"))
+PROJECT_ROOT = Path(os.environ.get("ASY_PROJECT_ROOT", Path(__file__).resolve().parent)).resolve()
+FULL_DIR     = Path(os.environ.get("WATERSCENES_FULL_DIR", PROJECT_ROOT / "dataset" / "WaterScenes_Full"))
+OUTPUT_DIR   = Path(os.environ.get("ASY_DATASET_DIR", PROJECT_ROOT / "dataset"))
 VOC_DIR      = OUTPUT_DIR / "VOCdevkit" / "VOC2007"
 RADAR_DIR    = OUTPUT_DIR / "VOCradar"
-PROJECT_ROOT = Path(os.environ.get("ASY_PROJECT_ROOT", Path(__file__).resolve().parent))
 
 IMG_W, IMG_H   = 1920, 1080
 FEAT_W, FEAT_H = 512, 512
@@ -125,7 +125,10 @@ def csv_to_npz(csv_path: Path, out_path: Path):
 def annotation_line(img_path: Path, xml_path: Path) -> str:
     tree = ET.parse(xml_path)
     root = tree.getroot()
-    line = str(img_path)
+    try:
+        line = img_path.resolve().relative_to(PROJECT_ROOT).as_posix()
+    except ValueError:
+        line = str(img_path)
     for obj in root.iter('object'):
         cls = obj.find('name').text
         if cls not in CLASSES:

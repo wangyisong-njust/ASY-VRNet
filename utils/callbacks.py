@@ -1,5 +1,6 @@
 import os
 import re
+from pathlib import Path
 import torch
 import matplotlib
 
@@ -17,6 +18,14 @@ from .utils import cvtColor, preprocess_input, resize_image
 from .utils_bbox import decode_outputs, non_max_suppression
 from .utils_map import get_coco_map, get_map
 from .radar_utils import load_radar_npz, radar_to_tensor
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def resolve_image_path(path):
+    path = Path(path)
+    return str(path if path.is_absolute() else PROJECT_ROOT / path)
 
 
 class LossHistory():
@@ -84,7 +93,7 @@ class LossHistory():
 class EvalCallback():
     def __init__(self, net, input_shape, class_names, num_classes, val_lines, log_dir, cuda, local_rank, radar_path, \
                  map_out_path=".temp_map_out", max_boxes=100, confidence=0.05, nms_iou=0.5, letterbox_image=True,
-                 MINOVERLAP=0.5, eval_flag=True, period=1):
+                 MINOVERLAP=0.5, eval_flag=True, period=1, radar_align_mode="letterbox"):
         super(EvalCallback, self).__init__()
 
         self.net = net
@@ -104,6 +113,7 @@ class EvalCallback():
         self.eval_flag = eval_flag
         self.period = period
         self.radar_path = radar_path
+        self.radar_align_mode = radar_align_mode
 
         self.maps = [0]
         self.epoches = [0]
@@ -162,14 +172,14 @@ class EvalCallback():
         for i, c in list(enumerate(top_label)):
             predicted_class = self.class_names[int(c)]
             box = top_boxes[i]
-            score = str(top_conf[i])
+            score = float(top_conf[i])
 
             top, left, bottom, right = box
             if predicted_class not in class_names:
                 continue
 
-            f.write("%s %s %s %s %s %s\n" % (
-            predicted_class, score[:6], str(int(left)), str(int(top)), str(int(right)), str(int(bottom))))
+            f.write("%s %.8f %s %s %s %s\n" % (
+            predicted_class, score, str(int(left)), str(int(top)), str(int(right)), str(int(bottom))))
 
         f.close()
         return
@@ -196,8 +206,14 @@ class EvalCallback():
                 # ------------------------------#
                 #   读取图像并转换成RGB图像
                 # ------------------------------#
-                image = Image.open(line[0])
-                radar_data = load_radar_npz(self.radar_path, name, image.size, self.input_shape)
+                image = Image.open(resolve_image_path(line[0]))
+                radar_data = load_radar_npz(
+                    self.radar_path,
+                    name,
+                    image.size,
+                    self.input_shape,
+                    align_mode=self.radar_align_mode,
+                )
                 device = torch.device("cuda", self.local_rank) if self.cuda else torch.device("cpu")
                 radar_data = radar_to_tensor(radar_data, device=device)
                 # ------------------------------#

@@ -21,6 +21,10 @@ downloads/
 *.log
 logs_paper_baseline_*/
 logs_seg_paper_baseline_*/
+logs_paper_repro_*/
+logs_seg_paper_repro_*/
+logs_innovation_*/
+logs_seg_innovation_*/
 logs/loss_*/
 logs_seg/loss_*/
 logs/ep*-loss*.pth
@@ -29,3 +33,6 @@ logs/ep*-loss*.pth
 paper_metrics_best/*
 !paper_metrics_best/paper_metrics.json
 !paper_metrics_best/paper_metrics.csv
+paper_metrics_*/*
+!paper_metrics_*/paper_metrics.json
+!paper_metrics_*/paper_metrics.csv

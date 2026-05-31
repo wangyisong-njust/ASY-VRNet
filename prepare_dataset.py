@@ -32,11 +32,11 @@ from PIL import Image
 from tqdm import tqdm
 
 # ====================== 配置 ======================
-SAMPLE_DIR   = Path("/mnt/f/ASY-VRNet/dataset/WaterScenes_Samples")
-OUTPUT_DIR   = Path("/mnt/f/ASY-VRNet/dataset")
+PROJECT_ROOT = Path(os.environ.get("ASY_PROJECT_ROOT", Path(__file__).resolve().parent)).resolve()
+SAMPLE_DIR   = Path(os.environ.get("WATERSCENES_SAMPLE_DIR", PROJECT_ROOT / "dataset" / "WaterScenes_Samples"))
+OUTPUT_DIR   = Path(os.environ.get("ASY_DATASET_DIR", PROJECT_ROOT / "dataset"))
 VOC_DIR      = OUTPUT_DIR / "VOCdevkit" / "VOC2007"
 RADAR_DIR    = OUTPUT_DIR / "VOCradar"
-PROJECT_ROOT = Path("/mnt/f/ASY-VRNet")
 
 IMG_W, IMG_H = 1920, 1080   # 原图分辨率
 FEAT_W, FEAT_H = 512, 512   # 雷达特征图目标分辨率
@@ -129,7 +129,10 @@ def annotation_line(img_path: Path, xml_path: Path) -> str:
     """生成 2007_train.txt 格式的一行"""
     tree = ET.parse(xml_path)
     root = tree.getroot()
-    line = str(img_path)
+    try:
+        line = img_path.resolve().relative_to(PROJECT_ROOT).as_posix()
+    except ValueError:
+        line = str(img_path)
     for obj in root.iter('object'):
         cls = obj.find('name').text
         if cls not in CLASSES:

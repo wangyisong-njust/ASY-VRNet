@@ -29,7 +29,7 @@ class EfficientVRNet(nn.Module):
         )
 
         self.head = DecoupleHead(num_classes, width, depthwise=True)
-        self.loss_balancer = MultiTaskLossWrapper(2) if task_loss_mode == "uncertainty" else None
+        self.loss_balancer = MultiTaskLossWrapper(4) if task_loss_mode == "uncertainty" else None
 
     def forward(self, x, x_radar):
         fpn_outs, seg_outputs = self.backbone.forward(x, x_radar)

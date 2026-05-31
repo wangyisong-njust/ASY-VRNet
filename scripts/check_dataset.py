@@ -3,6 +3,14 @@ import os
 from pathlib import Path
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def resolve_path(path):
+    path = Path(path)
+    return path if path.is_absolute() else PROJECT_ROOT / path
+
+
 def read_lines(path):
     if not path.exists():
         raise FileNotFoundError(f"missing txt file: {path}")
@@ -22,7 +30,7 @@ def check_split(split_name, lines, vocdevkit, radar_root, limit):
         if len(parts) < 2:
             missing["empty_boxes"] += 1
             continue
-        image_path = Path(parts[0])
+        image_path = resolve_path(parts[0])
         stem = image_path.stem
         seg_path = vocdevkit / "VOC2007" / "SegmentationClass" / f"{stem}.png"
         radar_path = radar_root / f"{stem}.npz"
@@ -38,15 +46,15 @@ def main():
     parser = argparse.ArgumentParser(description="Check ASY-VRNet VOC + radar dataset paths.")
     parser.add_argument("--train_txt", default=os.environ.get("ASY_TRAIN_TXT", "2007_train.txt"))
     parser.add_argument("--val_txt", default=os.environ.get("ASY_VAL_TXT", "2007_val.txt"))
-    parser.add_argument("--vocdevkit", default=os.environ.get("ASY_VOCDEVKIT", "/mnt/f/ASY-VRNet/dataset/VOCdevkit"))
-    parser.add_argument("--radar_root", default=os.environ.get("ASY_RADAR_ROOT", "/mnt/f/ASY-VRNet/dataset/VOCradar"))
+    parser.add_argument("--vocdevkit", default=os.environ.get("ASY_VOCDEVKIT", str(PROJECT_ROOT / "dataset" / "VOCdevkit")))
+    parser.add_argument("--radar_root", default=os.environ.get("ASY_RADAR_ROOT", str(PROJECT_ROOT / "dataset" / "VOCradar")))
     parser.add_argument("--limit", type=int, default=200)
     args = parser.parse_args()
 
-    train_txt = Path(args.train_txt)
-    val_txt = Path(args.val_txt)
-    vocdevkit = Path(args.vocdevkit)
-    radar_root = Path(args.radar_root)
+    train_txt = resolve_path(args.train_txt)
+    val_txt = resolve_path(args.val_txt)
+    vocdevkit = resolve_path(args.vocdevkit)
+    radar_root = resolve_path(args.radar_root)
 
     print(f"train_txt={train_txt.resolve()}")
     print(f"val_txt={val_txt.resolve()}")

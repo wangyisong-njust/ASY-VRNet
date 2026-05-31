@@ -1,17 +1,26 @@
 from random import sample, shuffle
 import re
 import cv2
+from pathlib import Path
 import numpy as np
 import torch
 from PIL import Image
 from torch.utils.data.dataset import Dataset
 import albumentations as A
-from utils.utils import cvtColor, preprocess_input, preprocess_input_radar
-from utils.radar_utils import letterbox_radar_map
+from utils.utils import cvtColor, preprocess_input
+from utils.radar_utils import load_radar_npz
 from utils_seg.utils import preprocess_input as preprocess_input_seg
 import random as rd
 import matplotlib.pyplot as plt
 import os
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def resolve_image_path(path):
+    path = Path(path)
+    return str(path if path.is_absolute() else PROJECT_ROOT / path)
 
 
 def visualize(image):
@@ -35,7 +44,8 @@ transform_fog = A.Compose(
 
 class YoloDataset(Dataset):
     def __init__(self, annotation_lines, input_shape, num_classes, num_classes_seg, epoch_length, radar_root, \
-                 mosaic, mixup, mosaic_prob, mixup_prob, seg_dataset_path, train, special_aug_ratio=0.7):
+                 mosaic, mixup, mosaic_prob, mixup_prob, seg_dataset_path, train, special_aug_ratio=0.7,
+                 radar_align_mode="letterbox"):
         super(YoloDataset, self).__init__()
 
         # ------------------------- 通用 --------------------------- #
@@ -63,6 +73,7 @@ class YoloDataset(Dataset):
 
         # ------------------------- 雷达 --------------------------- #
         self.radar_root = radar_root
+        self.radar_align_mode = radar_align_mode
         # ---------------------------------------------------------- #
 
     def __len__(self):
@@ -110,7 +121,7 @@ class YoloDataset(Dataset):
         # ------------------------------#
         #   读取图像并转换成RGB图像
         # ------------------------------#
-        image = Image.open(line[0])
+        image = Image.open(resolve_image_path(line[0]))
         image = cvtColor(image)
         seg_label = Image.fromarray(np.array(seg_label))
         # ------------------------------#
@@ -118,10 +129,13 @@ class YoloDataset(Dataset):
         # ------------------------------#
         iw, ih = image.size
         h, w = input_shape
-        radar_path = self.radar_root + '/' + id + '.npz'
-        radar_data = np.load(radar_path)['arr_0']
-        radar_data = letterbox_radar_map(radar_data, image.size, input_shape)
-        radar_data = preprocess_input_radar(radar_data)
+        radar_data = load_radar_npz(
+            self.radar_root,
+            id,
+            image.size,
+            input_shape,
+            align_mode=self.radar_align_mode,
+        )
         # ------------------------------#
         #   获得预测框
         # ------------------------------#
@@ -145,21 +159,19 @@ class YoloDataset(Dataset):
         new_label.paste(segment_label, (dx, dy))
 
         # ---------------------------------#
-        #   自然天气数据增强
+        #   自然天气数据增强。论文实验设置使用 Albumentations 的天气增强；
+        #   这里只增强图像，不改动检测框、分割标签和雷达 REVP map。
         # ---------------------------------#
-        # if random:
-        #     weather_random_number = rd.randint(0, 100)
-        #
-        #     new_image = np.array(new_image, np.float32)
-        #     if 0 <= weather_random_number < 15:
-        #         new_image = transform_rain(image=new_image)
-        #         new_image = new_image['image']
-        #     if 15 <= weather_random_number < 30:
-        #         new_image = transform_flare(image=new_image)
-        #         new_image = new_image['image']
-        #     if 30 <= weather_random_number < 65:
-        #         new_image = transform_fog(image=new_image)
-        #         new_image = new_image['image']
+        if random:
+            weather_random_number = rd.randint(0, 100)
+            image_aug = np.array(new_image, np.float32)
+            if 0 <= weather_random_number < 15:
+                image_aug = transform_rain(image=image_aug)['image']
+            elif 15 <= weather_random_number < 30:
+                image_aug = transform_flare(image=image_aug)['image']
+            elif 30 <= weather_random_number < 65:
+                image_aug = transform_fog(image=image_aug)['image']
+            new_image = Image.fromarray(np.clip(image_aug, 0, 255).astype(np.uint8))
 
         # ---------------------------------#
         #   对真实框进行调整
@@ -309,7 +321,7 @@ class YoloDataset(Dataset):
             # ---------------------------------#
             #   打开图片
             # ---------------------------------#
-            image = Image.open(line_content[0])
+            image = Image.open(resolve_image_path(line_content[0]))
             image = cvtColor(image)
 
             # ---------------------------------#
@@ -454,4 +466,3 @@ def yolo_dataset_collate(batch):
     pngs = torch.from_numpy(np.array(pngs)).long()
     seg_labels = torch.from_numpy(np.array(seg_labels)).type(torch.FloatTensor)
     return images, bboxes, radars, pngs, seg_labels
-

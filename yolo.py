@@ -1,6 +1,7 @@
 import colorsys
 import os
 import time
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -18,6 +19,9 @@ from utils.radar_utils import load_radar_npz, radar_to_tensor
 '''
 
 
+PROJECT_ROOT = Path(__file__).resolve().parent
+
+
 class YOLO(object):
     _defaults = {
         # --------------------------------------------------------------------------#
@@ -29,7 +33,7 @@ class YOLO(object):
         #   如果出现shape不匹配，同时要注意训练时的model_path和classes_path参数的修改
         # --------------------------------------------------------------------------#
         "model_path"        : 'logs/best_epoch_weights.pth',
-        "radar_root": "/mnt/f/ASY-VRNet/dataset/VOCradar",
+        "radar_root": str(PROJECT_ROOT / "dataset" / "VOCradar"),
         "classes_path": 'model_data/waterscenes.txt',
         # ---------------------------------------------------------------------#
         #   输入图片的大小，必须为32的倍数。
@@ -37,6 +41,7 @@ class YOLO(object):
         "input_shape": [512, 512],
         "num_seg_classes": 9,
         "radar_in_channels": int(os.environ.get("ASY_RADAR_CHANNELS", "4")),
+        "radar_align_mode": os.environ.get("ASY_RADAR_ALIGN_MODE", "letterbox"),
         "fusion_mode": os.environ.get("ASY_FUSION_MODE", "baseline"),
         "radar_dropout": float(os.environ.get("ASY_RADAR_DROPOUT", "0.0")),
         "task_loss_mode": os.environ.get("ASY_TASK_LOSS", "sum"),
@@ -80,6 +85,7 @@ class YOLO(object):
             setattr(self, name, value)
             self._defaults[name] = value
         self.radar_in_channels = int(self.radar_in_channels)
+        self.radar_align_mode = str(self.radar_align_mode).lower()
         self.radar_dropout = float(self.radar_dropout)
         self.fusion_mode = str(self.fusion_mode).lower()
         self.task_loss_mode = str(self.task_loss_mode).lower()
@@ -113,7 +119,17 @@ class YOLO(object):
             task_loss_mode=self.task_loss_mode,
         )
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.net.load_state_dict(torch.load(self.model_path, map_location=device))
+        checkpoint = torch.load(self.model_path, map_location=device)
+        model_dict = self.net.state_dict()
+        compatible_dict = {
+            k: v for k, v in checkpoint.items()
+            if k in model_dict and model_dict[k].shape == v.shape
+        }
+        skipped = sorted(set(checkpoint.keys()) - set(compatible_dict.keys()))
+        model_dict.update(compatible_dict)
+        self.net.load_state_dict(model_dict)
+        if skipped:
+            print(f"Skipped {len(skipped)} incompatible keys when loading {self.model_path}: {skipped[:5]}")
         self.net = self.net.eval()
         print('{} model, and classes loaded.'.format(self.model_path))
         if not onnx:
@@ -125,7 +141,13 @@ class YOLO(object):
         return torch.device('cuda' if self.cuda and torch.cuda.is_available() else 'cpu')
 
     def _prepare_radar(self, image_id, image):
-        radar_data = load_radar_npz(self.radar_root, image_id, image.size, self.input_shape)
+        radar_data = load_radar_npz(
+            self.radar_root,
+            image_id,
+            image.size,
+            self.input_shape,
+            align_mode=self.radar_align_mode,
+        )
         return radar_to_tensor(radar_data, device=self._device()).float()
 
     # ---------------------------------------------------#
@@ -466,14 +488,14 @@ class YOLO(object):
         for i, c in list(enumerate(top_label)):
             predicted_class = self.class_names[int(c)]
             box = top_boxes[i]
-            score = str(top_conf[i])
+            score = float(top_conf[i])
 
             top, left, bottom, right = box
             if predicted_class not in class_names:
                 continue
 
-            f.write("%s %s %s %s %s %s\n" % (
-            predicted_class, score[:6], str(int(left)), str(int(top)), str(int(right)), str(int(bottom))))
+            f.write("%s %.8f %s %s %s %s\n" % (
+            predicted_class, score, str(int(left)), str(int(top)), str(int(right)), str(int(bottom))))
 
         f.close()
         return

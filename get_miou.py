@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from PIL import Image
 from tqdm import tqdm
@@ -12,6 +13,7 @@ from utils_seg.utils_metrics import compute_mIoU, show_results
 2、该文件计算的是验证集的miou，当前该库将测试集当作验证集使用，不单独划分测试集
 '''
 if __name__ == "__main__":
+    PROJECT_ROOT = Path(__file__).resolve().parent
     #---------------------------------------------------------------------------#
     #   miou_mode用于指定该文件运行时计算的内容
     #   miou_mode为0代表整个miou计算流程，包括获得预测结果、计算miou。
@@ -22,17 +24,17 @@ if __name__ == "__main__":
     #------------------------------#
     #   分类个数+1、如2+1
     #------------------------------#
-    num_classes     = 21
+    num_classes     = 9
     #--------------------------------------------#
     #   区分的种类，和json_to_dataset里面的一样
     #--------------------------------------------#
-    name_classes    = ["background","aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
+    name_classes    = ["background", "ship", "buoy", "sailor", "pier", "boat", "vessel", "kayak", "water"]
     # name_classes    = ["_background_","cat","dog"]
     #-------------------------------------------------------#
     #   指向VOC数据集所在的文件夹
     #   默认指向根目录下的VOC数据集
     #-------------------------------------------------------#
-    VOCdevkit_path  = 'E:/Big_Datasets/voc_seg/VOCdevkit/VOCdevkit'
+    VOCdevkit_path  = os.environ.get("ASY_VOCDEVKIT", str(PROJECT_ROOT / "dataset" / "VOCdevkit"))
 
     image_ids       = open(os.path.join(VOCdevkit_path, "VOC2007/ImageSets/Segmentation/val.txt"),'r').read().splitlines() 
     gt_dir          = os.path.join(VOCdevkit_path, "VOC2007/SegmentationClass/")

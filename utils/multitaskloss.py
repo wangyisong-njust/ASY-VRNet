@@ -1,6 +1,5 @@
-import torch
 import torch.nn as nn
-import math
+import torch
 
 
 class MultiTaskLossWrapper(nn.Module):
@@ -9,11 +8,12 @@ class MultiTaskLossWrapper(nn.Module):
         self.task_num = task_num
         self.log_vars = nn.Parameter(torch.zeros(task_num))
 
-    def forward(self, loss_seg, loss_det):
-        precision_det = torch.exp(-self.log_vars[0])
-        loss0 = precision_det * loss_det + self.log_vars[0]
+    def forward(self, *losses):
+        if len(losses) != self.task_num:
+            raise ValueError(f"Expected {self.task_num} losses, got {len(losses)}")
 
-        precision_seg = torch.exp(-self.log_vars[1])
-        loss1 = precision_seg * loss_seg + self.log_vars[1]
-
-        return loss0 + loss1
+        total = 0
+        for log_var, loss in zip(self.log_vars, losses):
+            precision = torch.exp(-log_var)
+            total = total + precision * loss + log_var
+        return total

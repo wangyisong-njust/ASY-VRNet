@@ -4,6 +4,8 @@
 import datetime
 import os
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+from pathlib import Path
+
 import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
@@ -26,6 +28,9 @@ from utils_seg.utils import show_config as show_config_seg
 from utils_seg.dataloader import DeeplabDataset, deeplab_dataset_collate
 from utils_seg.utils_fit import fit_one_epoch as fit_one_epoch_seg
 from utils_seg.callbacks import LossHistory as LossHistory_seg
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent
 
 
 def env_bool(name, default):
@@ -122,6 +127,7 @@ if __name__ == "__main__":
     #   ASY_TASK_LOSS: sum | uncertainty
     # ------------------------------------------------------#
     radar_in_channels = env_int("ASY_RADAR_CHANNELS", 4)
+    radar_align_mode = os.environ.get("ASY_RADAR_ALIGN_MODE", "letterbox").lower()
     fusion_mode = os.environ.get("ASY_FUSION_MODE", "baseline").lower()
     radar_dropout = env_float("ASY_RADAR_DROPOUT", 0.0)
     task_loss_mode = os.environ.get("ASY_TASK_LOSS", "sum").lower()
@@ -129,6 +135,8 @@ if __name__ == "__main__":
         raise ValueError(f"Unsupported ASY_FUSION_MODE={fusion_mode!r}")
     if task_loss_mode not in {"sum", "uncertainty"}:
         raise ValueError(f"Unsupported ASY_TASK_LOSS={task_loss_mode!r}")
+    if radar_align_mode not in {"resize", "direct", "letterbox", "none"}:
+        raise ValueError(f"Unsupported ASY_RADAR_ALIGN_MODE={radar_align_mode!r}")
 
     # ------------------------------------------------------------------#
     #   mosaic              马赛克数据增强。
@@ -258,7 +266,7 @@ if __name__ == "__main__":
     # ----------------------------------------------------#
     # 雷达feature map路径
     # ----------------------------------------------------#
-    radar_file_path = os.environ.get("ASY_RADAR_ROOT", "/mnt/f/ASY-VRNet/dataset/VOCradar")
+    radar_file_path = os.environ.get("ASY_RADAR_ROOT", str(PROJECT_ROOT / "dataset" / "VOCradar"))
 
     # ----------------------------------------------------#
     #   获得目标检测图片路径和标签
@@ -271,7 +279,7 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------#
     #   VOCdevkit_path  分割数据集路径
     # ------------------------------------------------------------------#
-    VOCdevkit_path = os.environ.get("ASY_VOCDEVKIT", '/mnt/f/ASY-VRNet/dataset/VOCdevkit')
+    VOCdevkit_path = os.environ.get("ASY_VOCDEVKIT", str(PROJECT_ROOT / "dataset" / "VOCdevkit"))
 
     # -----------------------------------------------------#
     #   num_classes     训练自己的数据集必须要修改的
@@ -283,12 +291,12 @@ if __name__ == "__main__":
     #   种类少（几类）时，设置为True
     #   种类多（十几类）时，如果batch_size比较大（10以上），那么设置为True
     #   种类多（十几类）时，如果batch_size比较小（10以下），那么设置为False
-    dice_loss = True
+    dice_loss = env_bool("ASY_DICE_LOSS", True)
 
     # ------------------------------------------------------------------#
     #   是否使用focal loss来防止正负样本不平衡
     # ------------------------------------------------------------------#
-    focal_loss = True
+    focal_loss = env_bool("ASY_FOCAL_LOSS", True)
 
     # ------------------------------------------------------------------#
     #   是否给不同种类赋予不同的损失权值，默认是平衡的。
@@ -297,7 +305,16 @@ if __name__ == "__main__":
     #   num_classes = 3
     #   cls_weights = np.array([1, 2, 3], np.float32)
     # ------------------------------------------------------------------#
-    cls_weights = np.ones([num_classes_seg], np.float32)
+    cls_weights_env = os.environ.get("ASY_SEG_CLASS_WEIGHTS", "").strip()
+    if cls_weights_env:
+        cls_weights = np.array([float(v) for v in cls_weights_env.split(",")], np.float32)
+        if len(cls_weights) != num_classes_seg:
+            raise ValueError(
+                f"ASY_SEG_CLASS_WEIGHTS must contain {num_classes_seg} comma-separated values, "
+                f"got {len(cls_weights)}"
+            )
+    else:
+        cls_weights = np.ones([num_classes_seg], np.float32)
 
     # ------------------------------------------------------------------#
     #   save_dir_seg        分割权值与日志文件保存的文件夹
@@ -467,12 +484,14 @@ if __name__ == "__main__":
 
     show_config(
         classes_path=classes_path, model_path=model_path, input_shape=input_shape, \
+        phi=phi,
         Init_Epoch=Init_Epoch, Freeze_Epoch=Freeze_Epoch, UnFreeze_Epoch=UnFreeze_Epoch,
         Freeze_batch_size=Freeze_batch_size, Unfreeze_batch_size=Unfreeze_batch_size, Freeze_Train=Freeze_Train, \
         Init_lr=Init_lr, Min_lr=Min_lr, optimizer_type=optimizer_type, momentum=momentum,
         lr_decay_type=lr_decay_type, \
         save_period=save_period, save_dir=save_dir, num_workers=num_workers, num_train=num_train, num_val=num_val,
         radar_in_channels=radar_in_channels, fusion_mode=fusion_mode,
+        radar_align_mode=radar_align_mode,
         radar_dropout=radar_dropout, task_loss_mode=task_loss_mode
     )
     # ---------------------------------------------------------#
@@ -573,14 +592,16 @@ if __name__ == "__main__":
         train_dataset = YoloDataset(annotation_lines=train_lines, input_shape=input_shape, num_classes=num_classes,
                                     epoch_length=UnFreeze_Epoch, \
                                     mosaic=False, mixup=False, mosaic_prob=0, mixup_prob=0,
-                                    train=False, special_aug_ratio=0, radar_root=radar_file_path,
-                                    num_classes_seg=num_classes_seg, seg_dataset_path=VOCdevkit_path)
+                                    train=True, special_aug_ratio=0, radar_root=radar_file_path,
+                                    num_classes_seg=num_classes_seg, seg_dataset_path=VOCdevkit_path,
+                                    radar_align_mode=radar_align_mode)
 
         val_dataset = YoloDataset(annotation_lines=val_lines, input_shape=input_shape, num_classes=num_classes,
                                   epoch_length=UnFreeze_Epoch, \
                                   mosaic=False, mixup=False, mosaic_prob=0, mixup_prob=0, train=False,
                                   special_aug_ratio=0, radar_root=radar_file_path,
-                                  num_classes_seg=num_classes_seg, seg_dataset_path=VOCdevkit_path)
+                                  num_classes_seg=num_classes_seg, seg_dataset_path=VOCdevkit_path,
+                                  radar_align_mode=radar_align_mode)
 
         # ---------------------------------------#
         #   构建分割数据集加载器。
@@ -628,10 +649,11 @@ if __name__ == "__main__":
         if local_rank == 0:
             eval_callback = EvalCallback(model, input_shape, class_names, num_classes, val_lines, log_dir, Cuda, \
                                          eval_flag=eval_flag, period=eval_period, radar_path=radar_file_path,
-                                         local_rank=local_rank)
+                                         local_rank=local_rank, radar_align_mode=radar_align_mode)
             eval_callback_seg = EvalCallback_seg(model, input_shape, num_classes_seg, val_lines, VOCdevkit_path,
                                                  log_dir_seg, Cuda, eval_flag=eval_flag, period=eval_period,
-                                                 radar_path=radar_file_path, local_rank=local_rank)
+                                                 radar_path=radar_file_path, local_rank=local_rank,
+                                                 radar_align_mode=radar_align_mode)
         else:
             eval_callback = None
             eval_callback_seg = None

@@ -1,8 +1,12 @@
 import os
 import random
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 from utils.utils import get_classes
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent
 
 # --------------------------------------------------------------------------------------------------------------------------------#
 #   annotation_mode用于指定该文件运行时计算的内容
@@ -30,7 +34,7 @@ train_percent = 0.8
 #   指向VOC数据集所在的文件夹
 #   默认指向根目录下的VOC数据集
 # -------------------------------------------------------#
-VOCdevkit_path = "E:/dataset_collection/WaterScenes/all-1114-voc/all-1114/all/VOCdevkit"
+VOCdevkit_path = os.environ.get("ASY_VOCDEVKIT", str(PROJECT_ROOT / "dataset" / "VOCdevkit"))
 
 VOCdevkit_sets = [('2007', 'train'), ('2007', 'val')]
 classes, _ = get_classes(classes_path)
@@ -107,7 +111,12 @@ if __name__ == "__main__":
                              encoding='utf-8').read().strip().split()
             list_file = open('%s_%s.txt' % (year, image_set), 'w', encoding='utf-8')
             for image_id in image_ids:
-                list_file.write('%s/VOC%s/JPEGImages/%s.jpg' % (os.path.abspath(VOCdevkit_path), year, image_id))
+                img_path = Path(VOCdevkit_path) / f"VOC{year}" / "JPEGImages" / f"{image_id}.jpg"
+                try:
+                    img_path_for_txt = img_path.resolve().relative_to(PROJECT_ROOT).as_posix()
+                except ValueError:
+                    img_path_for_txt = str(img_path)
+                list_file.write(img_path_for_txt)
 
                 try:
                     convert_annotation(year, image_id, list_file)

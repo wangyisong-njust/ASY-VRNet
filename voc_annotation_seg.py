@@ -1,5 +1,6 @@
 import os
 import random
+from pathlib import Path
 
 import numpy as np
 from PIL import Image
@@ -17,7 +18,8 @@ train_percent       = 0.8
 #   指向VOC数据集所在的文件夹
 #   默认指向根目录下的VOC数据集
 #-------------------------------------------------------#
-VOCdevkit_path      = 'E:/Big_Datasets/voc_seg/VOCdevkit/VOCdevkit'
+PROJECT_ROOT = Path(__file__).resolve().parent
+VOCdevkit_path = os.environ.get("ASY_VOCDEVKIT", str(PROJECT_ROOT / "dataset" / "VOCdevkit"))
 
 if __name__ == "__main__":
     random.seed(0)

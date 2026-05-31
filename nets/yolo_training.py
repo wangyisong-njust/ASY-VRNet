@@ -70,7 +70,7 @@ class YOLOLoss(nn.Module):
 
         self.log_vars = nn.Parameter(torch.zeros(3))
 
-    def forward(self, inputs, labels=None):
+    def forward(self, inputs, labels=None, return_components=False):
         outputs = []
         x_shifts = []
         y_shifts = []
@@ -94,7 +94,14 @@ class YOLOLoss(nn.Module):
             expanded_strides.append(torch.ones_like(grid[:, :, 0]) * stride)
             outputs.append(output)
 
-        return self.get_losses(x_shifts, y_shifts, expanded_strides, labels, torch.cat(outputs, 1))
+        return self.get_losses(
+            x_shifts,
+            y_shifts,
+            expanded_strides,
+            labels,
+            torch.cat(outputs, 1),
+            return_components=return_components,
+        )
 
     def get_output_and_grid(self, output, k, stride):
         grid = self.grids[k]
@@ -110,7 +117,7 @@ class YOLOLoss(nn.Module):
         output[..., 2:4] = torch.exp(output[..., 2:4]) * stride
         return output, grid
 
-    def get_losses(self, x_shifts, y_shifts, expanded_strides, labels, outputs):
+    def get_losses(self, x_shifts, y_shifts, expanded_strides, labels, outputs, return_components=False):
         # -----------------------------------------------#
         #   [batch, n_anchors_all, 4]
         # -----------------------------------------------#
@@ -191,7 +198,10 @@ class YOLOLoss(nn.Module):
         loss_obj = (self.bcewithlog_loss(obj_preds.view(-1, 1), obj_targets)).sum()
         loss_cls = (self.bcewithlog_loss(cls_preds.view(-1, self.num_classes)[fg_masks], cls_targets)).sum()
         reg_weight = 1.0
-        loss = reg_weight * loss_iou + 2 * loss_obj + 2 * loss_cls
+        loss_iou = reg_weight * loss_iou / num_fg
+        loss_obj = 2 * loss_obj / num_fg
+        loss_cls = 2 * loss_cls / num_fg
+        loss = loss_iou + loss_obj + loss_cls
 
         # precision_reg = torch.exp(-self.log_vars[0])
         # loss_iou = precision_reg * loss_iou + self.log_vars[0]
@@ -204,7 +214,9 @@ class YOLOLoss(nn.Module):
         #
         # loss = loss_iou + loss_obj + loss_cls
 
-        return loss / num_fg
+        if return_components:
+            return loss, (loss_iou, loss_obj, loss_cls)
+        return loss
 
     @torch.no_grad()
     def get_assignments(self, num_gt, total_num_anchors, gt_bboxes_per_image, gt_classes, bboxes_preds_per_image,

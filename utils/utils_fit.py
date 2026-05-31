@@ -26,6 +26,28 @@ def combine_task_losses(loss_det, loss_seg, model_train):
     return loss_balancer(loss_seg, loss_det)
 
 
+def compute_detection_loss(yolo_loss, outputs, targets, model_train):
+    loss_balancer = get_loss_balancer(model_train)
+    if loss_balancer is not None and getattr(loss_balancer, "task_num", None) == 4:
+        loss_det, det_components = yolo_loss(outputs, targets, return_components=True)
+        return loss_det, det_components
+    return yolo_loss(outputs, targets), None
+
+
+def combine_detection_segmentation_losses(loss_det, loss_seg, det_components, model_train):
+    loss_balancer = get_loss_balancer(model_train)
+    if loss_balancer is None:
+        return loss_det + loss_seg
+    if getattr(loss_balancer, "task_num", None) == 4:
+        if det_components is None:
+            raise ValueError("4-task uncertainty loss requires detection loss components.")
+        loss_iou, loss_obj, loss_cls = det_components
+        # Paper Eq. 10 weights bbox regression, object confidence,
+        # detection classification and pixel classification separately.
+        return loss_balancer(loss_iou, loss_obj, loss_cls, loss_seg)
+    return loss_balancer(loss_det, loss_seg)
+
+
 def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, loss_history_seg, eval_callback, eval_callback_seg, optimizer, epoch, epoch_step,
                   epoch_step_val, gen, gen_val, Epoch, cuda, fp16, scaler, save_period, save_dir, dice_loss, focal_loss, cls_weights, num_class_seg, local_rank=0):
     total_loss_det = 0
@@ -81,9 +103,9 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, loss_history
             # ----------------------#
             #   计算损失
             # ----------------------#
-            loss_det = yolo_loss(outputs, targets)
+            loss_det, det_components = compute_detection_loss(yolo_loss, outputs, targets, model_train)
 
-            total_loss = combine_task_losses(loss_det, loss_seg, model_train)
+            total_loss = combine_detection_segmentation_losses(loss_det, loss_seg, det_components, model_train)
 
             with torch.no_grad():
                 train_f_score = f_score(outputs_seg, seg_labels)
@@ -110,9 +132,9 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, loss_history
                 # ----------------------#
                 #   calculate loss
                 # ----------------------#
-                loss_det = yolo_loss(outputs, targets)
+                loss_det, det_components = compute_detection_loss(yolo_loss, outputs, targets, model_train)
 
-                total_loss = combine_task_losses(loss_det, loss_seg, model_train)
+                total_loss = combine_detection_segmentation_losses(loss_det, loss_seg, det_components, model_train)
 
                 with torch.no_grad():
                     train_f_score = f_score(outputs_seg, seg_labels)

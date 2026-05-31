@@ -2,6 +2,7 @@ import colorsys
 import copy
 import time
 import os
+from pathlib import Path
 import cv2
 import numpy as np
 import torch
@@ -11,6 +12,9 @@ from torch import nn
 
 from nets.efficient_vrnet import EfficientVRNet
 from utils_seg.utils import cvtColor, preprocess_input, resize_image, show_config
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent
 
 
 #-----------------------------------------------------------------------------------#
@@ -26,7 +30,7 @@ class DeeplabV3(object):
         #   验证集损失较低不代表miou较高，仅代表该权值在验证集上泛化性能较好。
         #-------------------------------------------------------------------#
         "model_path"        : 'logs/best_epoch_weights.pth',
-        "radar_root": "E:/Big_Datasets/water_surface/all-1114/all/VOCradar",
+        "radar_root": str(PROJECT_ROOT / "dataset" / "VOCradar"),
         #----------------------------------------#
         #   所需要区分的类的个数+1
         #----------------------------------------#

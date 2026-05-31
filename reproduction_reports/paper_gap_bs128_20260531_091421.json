@@ -1,0 +1,28 @@
+{
+  "best_failed_metrics": [
+    "mAP50-95",
+    "AR50-95",
+    "mIoU_o",
+    "mIoU_d",
+    "mAP_da",
+    "mIoUda_d",
+    "mAP_di",
+    "mIoUdi_d",
+    "mAP_sm",
+    "mIoUsm_o"
+  ],
+  "last_failed_metrics": [
+    "mAP50-95",
+    "AR50-95",
+    "mIoU_o",
+    "mIoU_d",
+    "mAP_da",
+    "mIoUda_d",
+    "mAP_di",
+    "mIoUdi_d",
+    "mAP_sm",
+    "mIoUsm_o"
+  ],
+  "best_reproduced": false,
+  "last_reproduced": false
+}

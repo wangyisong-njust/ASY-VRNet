@@ -31,7 +31,7 @@
 
 ```bash
 # 进入项目目录
-cd /mnt/f/ASY-VRNet
+cd <project-root>
 
 # 安装依赖（推荐使用 conda 虚拟环境）
 pip install torch==2.5.1 torchvision --index-url https://download.pytorch.org/whl/cu124
@@ -89,7 +89,7 @@ https://drive.google.com/drive/folders/1ts_Jl91FlhliurzIOxx6DP2qChCGLDBj
 
 **Step 2**：用 gdown 下载其余文件（约 800 MB）：
 ```bash
-cd /mnt/f/ASY-VRNet/dataset
+cd <project-root>/dataset
 
 # 检测标注（40 MB）
 python3 -m gdown 1FUKEI43Ns5uJ-wZycMKgtC3p6BoGJPiY -O detection.zip
@@ -103,13 +103,13 @@ python3 -m gdown 15c1Y4qnsTqygEbhHKkZS44u3ERgFu0Fe -O radar.zip
 
 **Step 3**：把 `image.zip` 也移到 `dataset/` 目录下：
 ```bash
-mv /path/to/image.zip /mnt/f/ASY-VRNet/dataset/image.zip
+mv /path/to/image.zip <project-root>/dataset/image.zip
 ```
 
 ### 3.2 解压
 
 ```bash
-cd /mnt/f/ASY-VRNet/dataset
+cd <project-root>/dataset
 
 unzip image.zip     -d WaterScenes_Full/
 unzip detection.zip -d WaterScenes_Full/
@@ -129,7 +129,7 @@ dataset/WaterScenes_Full/
 ### 3.3 转换为训练格式
 
 ```bash
-cd /mnt/f/ASY-VRNet
+cd <project-root>
 
 python3 prepare_dataset_full.py
 ```
@@ -159,7 +159,7 @@ dataset/VOCradar/            ← 雷达 NPZ 文件
 ### 4.1 下载预训练权重（可选但推荐）
 
 ```bash
-cd /mnt/f/ASY-VRNet/model_data
+cd <project-root>/model_data
 
 python3 -m gdown --folder \
   "https://drive.google.com/drive/folders/1KM5iBMeN8nYZEMuXk5Xge1ZjXE3qI1Kc" \
@@ -184,7 +184,7 @@ python3 -m gdown --folder \
 ### 4.3 开始训练
 
 ```bash
-cd /mnt/f/ASY-VRNet
+cd <project-root>
 
 python3 train.py
 ```
@@ -222,7 +222,7 @@ logs/
 ### 5.1 批量推理验证集
 
 ```bash
-cd /mnt/f/ASY-VRNet
+cd <project-root>
 
 python3 run_predict.py
 ```
@@ -239,7 +239,7 @@ Detection: 100%|██████████| 1000/1000
 ### 5.2 单张图片推理
 
 ```bash
-cd /mnt/f/ASY-VRNet
+cd <project-root>
 
 python3 predict.py
 ```
@@ -254,7 +254,7 @@ python3 predict.py
 _defaults = {
     "model_path"  : 'logs/best_epoch_weights.pth',  # 权重路径
     "classes_path": 'model_data/waterscenes.txt',    # 类别文件
-    "radar_root"  : '/mnt/f/ASY-VRNet/dataset/VOCradar',  # 雷达NPZ目录
+    "radar_root"  : 'dataset/VOCradar',  # 雷达NPZ目录
     "input_shape" : [512, 512],                      # 输入分辨率
     "phi"         : 'l',                             # 模型规模（需与训练一致）
     "confidence"  : 0.3,                             # 检测置信度阈值
@@ -389,7 +389,7 @@ self.net = EfficientVRNet(num_classes=self.num_classes, num_seg_classes=9, ...)
 **Step 7：重新训练**
 
 ```bash
-cd /mnt/f/ASY-VRNet
+cd <project-root>
 python3 train.py
 ```
 
@@ -451,7 +451,7 @@ python3 -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device
 
 ```bash
 # 1. 进入项目目录
-cd /mnt/f/ASY-VRNet
+cd <project-root>
 
 # 2. 转换数据集
 python3 prepare_dataset_full.py

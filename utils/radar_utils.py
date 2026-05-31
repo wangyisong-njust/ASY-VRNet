@@ -22,6 +22,19 @@ def normalize_radar(data, eps=1e-6):
     return data.astype(np.float32)
 
 
+def resize_radar_map(radar_data, input_shape):
+    """Resize a square REVP radar map to the network input size."""
+    radar_data = np.asarray(radar_data, dtype=np.float32)
+    if radar_data.ndim != 3:
+        raise ValueError(f"Radar map must have shape [C,H,W], got {radar_data.shape}")
+
+    h, w = int(input_shape[0]), int(input_shape[1])
+    resized = np.empty((radar_data.shape[0], h, w), dtype=np.float32)
+    for c in range(radar_data.shape[0]):
+        resized[c] = cv2.resize(radar_data[c], (w, h), interpolation=cv2.INTER_NEAREST)
+    return resized
+
+
 def letterbox_radar_map(radar_data, image_size, input_shape, fill_value=0.0):
     """Align a raw radar feature map with the image letterbox transform."""
     radar_data = np.asarray(radar_data, dtype=np.float32)
@@ -43,10 +56,27 @@ def letterbox_radar_map(radar_data, image_size, input_shape, fill_value=0.0):
     return aligned
 
 
-def load_radar_npz(radar_root, image_id, image_size, input_shape, normalize=True):
+def align_radar_map(radar_data, image_size, input_shape, align_mode="letterbox"):
+    align_mode = str(align_mode).lower()
+    if align_mode in {"resize", "direct"}:
+        return resize_radar_map(radar_data, input_shape)
+    if align_mode == "letterbox":
+        return letterbox_radar_map(radar_data, image_size, input_shape)
+    if align_mode == "none":
+        radar_data = np.asarray(radar_data, dtype=np.float32)
+        expected_shape = (int(input_shape[0]), int(input_shape[1]))
+        if radar_data.shape[-2:] != expected_shape:
+            raise ValueError(
+                f"Radar map shape {radar_data.shape[-2:]} does not match input shape {expected_shape}"
+            )
+        return radar_data
+    raise ValueError(f"Unsupported radar align mode: {align_mode!r}")
+
+
+def load_radar_npz(radar_root, image_id, image_size, input_shape, normalize=True, align_mode="letterbox"):
     radar_path = os.path.join(radar_root, image_id + ".npz")
     radar_data = np.load(radar_path)["arr_0"]
-    radar_data = letterbox_radar_map(radar_data, image_size, input_shape)
+    radar_data = align_radar_map(radar_data, image_size, input_shape, align_mode=align_mode)
     if normalize:
         radar_data = normalize_radar(radar_data)
     return radar_data

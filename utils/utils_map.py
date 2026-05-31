@@ -839,7 +839,7 @@ def preprocess_gt(gt_path, class_names):
             if class_name not in class_names:
                 continue
             cls_id  = class_names.index(class_name) + 1
-            bbox    = [left, top, right - left, bottom - top, difficult, str(image_id), cls_id, (right - left) * (bottom - top) - 10.0]
+            bbox    = [left, top, right - left, bottom - top, difficult, str(image_id), cls_id, (right - left) * (bottom - top)]
             boxes_per_image.append(bbox)
         images.append(image)
         bboxes.extend(boxes_per_image)

@@ -3,8 +3,16 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-PYTHON=${PYTHON:-/home/kaixin/anaconda3/envs/PDPP/bin/python}
-EXP_NAME=${EXP_NAME:-paper_baseline_lr001_300e_320}
+PROJECT_ROOT=$(pwd)
+if [[ -z "${PYTHON:-}" ]]; then
+    PYTHON=$(command -v python3 || command -v python || true)
+fi
+if [[ -z "${PYTHON}" ]]; then
+    echo "No Python interpreter found. Set PYTHON=/path/to/python before running."
+    exit 1
+fi
+EXP_NAME=${EXP_NAME:-paper_repro_phi_nano_5frames_bs16_100e_320}
+MASTER_PORT=${MASTER_PORT:-29500}
 
 export PYTHONNOUSERSITE=${PYTHONNOUSERSITE:-1}
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0,1,2,3}
@@ -14,9 +22,10 @@ export ASY_FP16=${ASY_FP16:-1}
 
 export ASY_INPUT_SHAPE=${ASY_INPUT_SHAPE:-320,320}
 export ASY_BATCH_SIZE=${ASY_BATCH_SIZE:-16}
-export ASY_NUM_WORKERS=${ASY_NUM_WORKERS:-8}
-export ASY_UNFREEZE_EPOCH=${ASY_UNFREEZE_EPOCH:-300}
-export ASY_SAVE_PERIOD=${ASY_SAVE_PERIOD:-20}
+export ASY_NUM_WORKERS=${ASY_NUM_WORKERS:-16}
+export ASY_UNFREEZE_EPOCH=${ASY_UNFREEZE_EPOCH:-100}
+export ASY_SAVE_PERIOD=${ASY_SAVE_PERIOD:-10}
+export ASY_PHI=${ASY_PHI:-nano}
 
 # train.py scales Init_lr by global_batch / 64. With global batch 16,
 # ASY_INIT_LR=0.04 gives an effective initial SGD LR of 0.01.
@@ -30,12 +39,17 @@ export ASY_EVAL_PERIOD=${ASY_EVAL_PERIOD:-10}
 
 export ASY_SAVE_DIR=${ASY_SAVE_DIR:-logs_${EXP_NAME}}
 export ASY_SAVE_DIR_SEG=${ASY_SAVE_DIR_SEG:-logs_seg_${EXP_NAME}}
-export ASY_VOCDEVKIT=${ASY_VOCDEVKIT:-/home/kaixin/code/ASY-VRNet/dataset/VOCdevkit}
-export ASY_RADAR_ROOT=${ASY_RADAR_ROOT:-/home/kaixin/code/ASY-VRNet/dataset/VOCradar}
+export ASY_VOCDEVKIT=${ASY_VOCDEVKIT:-${PROJECT_ROOT}/dataset/VOCdevkit}
+export ASY_RADAR_ROOT=${ASY_RADAR_ROOT:-${PROJECT_ROOT}/dataset/VOCradar_5_frames}
+export ASY_TASK_LOSS=${ASY_TASK_LOSS:-uncertainty}
+export ASY_FUSION_MODE=${ASY_FUSION_MODE:-baseline}
+export ASY_RADAR_DROPOUT=${ASY_RADAR_DROPOUT:-0}
+export ASY_RADAR_CHANNELS=${ASY_RADAR_CHANNELS:-4}
+export ASY_RADAR_ALIGN_MODE=${ASY_RADAR_ALIGN_MODE:-letterbox}
 
 mkdir -p "${ASY_SAVE_DIR}" "${ASY_SAVE_DIR_SEG}"
 
 "$PYTHON" scripts/check_dataset.py
 
 stamp=$(date +%Y%m%d_%H%M%S)
-"$PYTHON" -m torch.distributed.run --nproc_per_node=4 train.py 2>&1 | tee "${ASY_SAVE_DIR}/train_${stamp}.log"
+"$PYTHON" -m torch.distributed.run --master_port="${MASTER_PORT}" --nproc_per_node=4 train.py 2>&1 | tee "${ASY_SAVE_DIR}/train_${stamp}.log"

@@ -1,0 +1,181 @@
+{
+  "classes": {
+    "current": [
+      "pier",
+      "buoy",
+      "sailor",
+      "ship",
+      "boat",
+      "vessel",
+      "kayak"
+    ],
+    "expected_waterscenes": [
+      "pier",
+      "buoy",
+      "sailor",
+      "ship",
+      "boat",
+      "vessel",
+      "kayak"
+    ],
+    "matches_expected": true
+  },
+  "splits": {
+    "train_images": 37884,
+    "val_images": 10824,
+    "train_empty_box_lines": 0,
+    "val_empty_box_lines": 0,
+    "train_objects": {
+      "pier": 85306,
+      "ship": 23903,
+      "boat": 7551,
+      "vessel": 7763,
+      "sailor": 5594,
+      "buoy": 11538,
+      "kayak": 254
+    },
+    "val_objects": {
+      "ship": 6801,
+      "vessel": 2211,
+      "pier": 24334,
+      "buoy": 3320,
+      "boat": 2156,
+      "sailor": 1609,
+      "kayak": 86
+    },
+    "train_area_percentiles": [
+      6.0,
+      962.0,
+      2736.0,
+      12210.0,
+      1567823.0
+    ],
+    "val_area_percentiles": [
+      7.0,
+      968.0,
+      2822.0,
+      12525.0,
+      1446660.0
+    ]
+  },
+  "missing_files": {
+    "train": {},
+    "val": {},
+    "checked_per_split": 20
+  },
+  "model_params_m": {
+    "nano": 4.1376,
+    "tiny": 8.2825,
+    "s": 13.8152,
+    "m": 29.0438,
+    "l": 49.8236,
+    "paper_params_m": 4.12,
+    "closest_to_paper": "nano"
+  },
+  "radar_alignment_samples": [
+    {
+      "image_id": "36165",
+      "image_size": [
+        1920,
+        1080
+      ],
+      "npz_shape": [
+        4,
+        512,
+        512
+      ],
+      "npz_nonzero_bbox": [
+        34,
+        181,
+        221,
+        421
+      ],
+      "csv_direct_512_bbox": [
+        34,
+        181,
+        221,
+        421
+      ],
+      "csv_letterbox_512_bbox": [
+        34,
+        213,
+        221,
+        349
+      ],
+      "interpretation": "npz_matches_direct_512"
+    },
+    {
+      "image_id": "12050",
+      "image_size": [
+        1920,
+        1080
+      ],
+      "npz_shape": [
+        4,
+        512,
+        512
+      ],
+      "npz_nonzero_bbox": [
+        0,
+        110,
+        424,
+        365
+      ],
+      "csv_direct_512_bbox": [
+        0,
+        110,
+        424,
+        365
+      ],
+      "csv_letterbox_512_bbox": [
+        0,
+        174,
+        424,
+        317
+      ],
+      "interpretation": "npz_matches_direct_512"
+    },
+    {
+      "image_id": "40770",
+      "image_size": [
+        1920,
+        1080
+      ],
+      "npz_shape": [
+        4,
+        512,
+        512
+      ],
+      "npz_nonzero_bbox": [
+        71,
+        128,
+        368,
+        378
+      ],
+      "csv_direct_512_bbox": [
+        71,
+        128,
+        368,
+        378
+      ],
+      "csv_letterbox_512_bbox": [
+        71,
+        184,
+        368,
+        325
+      ],
+      "interpretation": "npz_matches_direct_512"
+    }
+  ],
+  "paper_baseline_script_defaults": {
+    "EXP_NAME": "paper_repro_phi_nano_5frames_bs16_100e_320",
+    "ASY_PHI": "nano",
+    "ASY_BATCH_SIZE": "16",
+    "ASY_UNFREEZE_EPOCH": "100",
+    "ASY_INPUT_SHAPE": "320,320",
+    "ASY_RADAR_ROOT": "${PROJECT_ROOT}/dataset/VOCradar_5_frames",
+    "ASY_RADAR_ALIGN_MODE": "letterbox",
+    "ASY_TASK_LOSS": "uncertainty",
+    "ASY_INIT_LR": "0.04"
+  }
+}
