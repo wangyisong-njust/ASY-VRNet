@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-06-01T09:06:41",
+  "timestamp": "2026-06-01T10:22:19",
   "config": {
     "input_shape": [
       320,
@@ -39,6 +39,10 @@
     "checked": 82,
     "failures": []
   },
+  "tracked_text": {
+    "checked": 163,
+    "matches": []
+  },
   "script_defaults": {
     "yolo.py": {
       "missing_required_tokens": []
@@ -53,6 +57,18 @@
       "missing_required_tokens": []
     },
     "run_predict.py": {
+      "missing_required_tokens": []
+    },
+    "prepare_dataset.py": {
+      "missing_required_tokens": []
+    },
+    "prepare_dataset_full.py": {
+      "missing_required_tokens": []
+    },
+    "deeplab.py": {
+      "missing_required_tokens": []
+    },
+    "MANUAL.md": {
       "missing_required_tokens": []
     },
     "scripts/run_train_4gpu.sh": {
@@ -124,17 +140,17 @@
     }
   },
   "segmentation_masks": {
-    "checked": 512,
+    "checked": 1024,
     "pixel_values": {
-      "0": 468322337,
-      "1": 12906959,
-      "2": 785824,
-      "3": 528094,
-      "4": 16536505,
-      "5": 2098389,
-      "6": 3212777,
-      "7": 61114,
-      "8": 557231201
+      "0": 954534785,
+      "1": 25216528,
+      "2": 2094545,
+      "3": 756549,
+      "4": 28830217,
+      "5": 5429727,
+      "6": 8482909,
+      "7": 80430,
+      "8": 1097940710
     },
     "invalid_masks": [],
     "size_mismatches": []
@@ -199,7 +215,7 @@
     "input_space_small_count_for_comparison": 8475
   },
   "end_to_end": {
-    "checked": 16,
+    "checked": 32,
     "failed_ids": [],
     "max_raw_channel_abs_error": 0.0,
     "max_dataloader_radar_abs_diff": 0.0,

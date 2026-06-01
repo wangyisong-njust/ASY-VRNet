@@ -173,7 +173,7 @@
     "ASY_BATCH_SIZE": "16",
     "ASY_UNFREEZE_EPOCH": "100",
     "ASY_INPUT_SHAPE": "320,320",
-    "ASY_RADAR_ROOT": "/home/kaixin/code/ASY-VRNet/dataset/VOCradar_5_frames",
+    "ASY_RADAR_ROOT": "dataset/VOCradar_5_frames",
     "ASY_RADAR_ALIGN_MODE": "letterbox",
     "ASY_TASK_LOSS": "uncertainty",
     "ASY_INIT_LR": "0.04"

@@ -13,6 +13,7 @@ import csv
 import json
 import os
 import re
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from collections import Counter
@@ -64,6 +65,14 @@ class Issue:
 def resolve_path(path: str | Path) -> Path:
     path = Path(path)
     return path if path.is_absolute() else PROJECT_ROOT / path
+
+
+def repo_path(path: str | Path) -> str:
+    path = resolve_path(path)
+    try:
+        return path.relative_to(PROJECT_ROOT).as_posix()
+    except ValueError:
+        return str(path)
 
 
 def read_lines(path: str | Path) -> list[str]:
@@ -265,7 +274,7 @@ def audit_radar_dirs(dataset_root: Path, radar_root: Path, all_ids: set[str], is
     for name, path in dirs.items():
         suffix = "*.npz" if name == "npz_root" else "*.csv"
         count = len(list(path.glob(suffix))) if path.exists() else 0
-        result[name] = {"path": str(path), "exists": path.exists(), "files": count}
+        result[name] = {"path": repo_path(path), "exists": path.exists(), "files": count}
         if not path.exists():
             add_issue(issues, "error", "radar_dirs", f"Missing {name}: {path}")
 
@@ -283,9 +292,9 @@ def audit_radar_dirs(dataset_root: Path, radar_root: Path, all_ids: set[str], is
 
 def audit_end_to_end_samples(lines: list[str], args: argparse.Namespace, class_count: int, issues: list[Issue]) -> dict:
     namespace = argparse.Namespace(
-        radar_root=str(resolve_path(args.radar_root)),
-        radar_csv_root=str(resolve_path(args.radar_csv_root)),
-        vocdevkit=str(resolve_path(args.vocdevkit)),
+        radar_root=repo_path(args.radar_root),
+        radar_csv_root=repo_path(args.radar_csv_root),
+        vocdevkit=repo_path(args.vocdevkit),
         input_shape=args.input_shape,
         num_classes=class_count,
         num_seg_classes=args.num_seg_classes,
@@ -328,6 +337,40 @@ def audit_source_syntax(issues: list[Issue]) -> dict:
     if failures:
         add_issue(issues, "error", "python_syntax", f"{len(failures)} Python files failed AST parsing")
     return {"checked": checked, "failures": failures[:20]}
+
+
+def audit_tracked_text_hygiene(issues: list[Issue]) -> dict:
+    try:
+        output = subprocess.check_output(["git", "ls-files"], cwd=PROJECT_ROOT, text=True)
+    except Exception as exc:
+        add_issue(issues, "warning", "tracked_text", f"Could not list tracked files: {exc}")
+        return {"checked": 0, "matches": []}
+
+    text_suffixes = {".py", ".md", ".sh", ".json", ".yml", ".yaml", ".txt"}
+    skip_dirs = {".git", "__pycache__", "dataset", "logs"}
+    home_pat = "/" + "home" + r"/[^/\s]+/"
+    mac_users_pat = "/" + "Users" + r"/[^/\s]+/"
+    win_users_pat = r"[A-Za-z]:\\\\" + "Users" + r"\\\\"
+    personal_path = re.compile(f"({home_pat}|{mac_users_pat}|{win_users_pat})")
+    internal_word = "\u5ba2\u6237"
+    matches = []
+    checked = 0
+    for rel_path in output.splitlines():
+        path = PROJECT_ROOT / rel_path
+        if set(Path(rel_path).parts) & skip_dirs or path.suffix.lower() not in text_suffixes:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        checked += 1
+        for line_no, line in enumerate(text.splitlines(), start=1):
+            if internal_word in line or personal_path.search(line):
+                matches.append({"path": rel_path, "line": line_no, "text": line.strip()[:160]})
+
+    if matches:
+        add_issue(issues, "error", "tracked_text", f"{len(matches)} tracked text lines contain local paths or internal wording")
+    return {"checked": checked, "matches": matches[:50]}
 
 
 def audit_high_risk_defaults(issues: list[Issue]) -> dict:
@@ -399,7 +442,7 @@ def audit_model_and_pretrain(args: argparse.Namespace, class_count: int, issues:
         add_issue(issues, "error", "model_contract", "Detection head class count does not match classes file")
 
     pretrain_path = resolve_path(args.coc_pretrained)
-    result["coc_pretrained"] = {"path": str(pretrain_path), "exists": pretrain_path.exists()}
+    result["coc_pretrained"] = {"path": repo_path(pretrain_path), "exists": pretrain_path.exists()}
     if args.phi == "l" and not pretrain_path.exists():
         add_issue(issues, "warning", "pretrain", f"CoC pretrained checkpoint missing: {pretrain_path}")
     elif pretrain_path.exists():
@@ -556,6 +599,7 @@ def main() -> int:
     radar_root = resolve_path(args.radar_root)
 
     syntax = audit_source_syntax(issues)
+    tracked_text = audit_tracked_text_hygiene(issues)
     defaults = audit_high_risk_defaults(issues)
     train_split = audit_split("train", train_lines, classes, vocdevkit, radar_root, issues)
     val_split = audit_split("val", val_lines, classes, vocdevkit, radar_root, issues)
@@ -582,8 +626,8 @@ def main() -> int:
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "config": {
             "input_shape": args.input_shape,
-            "radar_root": str(radar_root),
-            "radar_csv_root": str(resolve_path(args.radar_csv_root)),
+            "radar_root": repo_path(radar_root),
+            "radar_csv_root": repo_path(args.radar_csv_root),
             "radar_source_order": args.radar_source_order,
             "radar_target_order": args.radar_target_order,
             "radar_preserve_points": args.radar_preserve_points,
@@ -592,6 +636,7 @@ def main() -> int:
         },
         "classes": {"detection": classes, "segmentation": SEG_CLASSES},
         "syntax": syntax,
+        "tracked_text": tracked_text,
         "script_defaults": defaults,
         "splits": {"train": train_split, "val": val_split, "overlap": len(overlap), "official": official},
         "segmentation_masks": masks,
