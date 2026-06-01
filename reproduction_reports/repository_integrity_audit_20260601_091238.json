@@ -1,0 +1,242 @@
+{
+  "timestamp": "2026-06-01T09:12:38",
+  "config": {
+    "input_shape": [
+      320,
+      320
+    ],
+    "radar_root": "/home/kaixin/code/ASY-VRNet/dataset/VOCradar_5_frames",
+    "radar_csv_root": "/home/kaixin/code/ASY-VRNet/dataset/WaterScenes_Full/radar_5_frames",
+    "radar_source_order": "range,doppler,elevation,power",
+    "radar_target_order": "range,elevation,velocity,power",
+    "radar_preserve_points": true,
+    "small_area_space": "original",
+    "dark_times": "night,nightfall"
+  },
+  "classes": {
+    "detection": [
+      "pier",
+      "buoy",
+      "sailor",
+      "ship",
+      "boat",
+      "vessel",
+      "kayak"
+    ],
+    "segmentation": [
+      "background",
+      "ship",
+      "buoy",
+      "sailor",
+      "pier",
+      "boat",
+      "vessel",
+      "kayak",
+      "water"
+    ]
+  },
+  "syntax": {
+    "checked": 82,
+    "failures": []
+  },
+  "script_defaults": {
+    "yolo.py": {
+      "missing_required_tokens": []
+    },
+    "train.py": {
+      "missing_required_tokens": []
+    },
+    "eval_paper_metrics.py": {
+      "missing_required_tokens": []
+    },
+    "scripts/check_dataset.py": {
+      "missing_required_tokens": []
+    },
+    "run_predict.py": {
+      "missing_required_tokens": []
+    },
+    "prepare_dataset.py": {
+      "missing_required_tokens": []
+    },
+    "prepare_dataset_full.py": {
+      "missing_required_tokens": []
+    },
+    "deeplab.py": {
+      "missing_required_tokens": []
+    },
+    "MANUAL.md": {
+      "missing_required_tokens": []
+    },
+    "scripts/run_train_4gpu.sh": {
+      "missing_required_tokens": []
+    },
+    "legacy_deeplab_scripts": [
+      "predict_seg.py",
+      "deeplab.py"
+    ]
+  },
+  "splits": {
+    "train": {
+      "images": 37884,
+      "unique_ids": 37884,
+      "empty_box_lines": 0,
+      "objects": 141909,
+      "class_counts": {
+        "pier": 85306,
+        "ship": 23903,
+        "boat": 7551,
+        "vessel": 7763,
+        "sailor": 5594,
+        "buoy": 11538,
+        "kayak": 254
+      },
+      "missing": {},
+      "malformed": {},
+      "area_percentiles": [
+        6.0,
+        962.0,
+        2736.0,
+        12210.0,
+        1567823.0
+      ]
+    },
+    "val": {
+      "images": 10824,
+      "unique_ids": 10824,
+      "empty_box_lines": 0,
+      "objects": 40517,
+      "class_counts": {
+        "ship": 6801,
+        "vessel": 2211,
+        "pier": 24334,
+        "buoy": 3320,
+        "boat": 2156,
+        "sailor": 1609,
+        "kayak": 86
+      },
+      "missing": {},
+      "malformed": {},
+      "area_percentiles": [
+        7.0,
+        968.0,
+        2822.0,
+        12525.0,
+        1446660.0
+      ]
+    },
+    "overlap": 0,
+    "official": {
+      "available": true,
+      "train_matches": true,
+      "val_matches": true,
+      "train_missing_from_current": 0,
+      "train_extra_in_current": 0,
+      "val_missing_from_current": 0,
+      "val_extra_in_current": 0
+    }
+  },
+  "segmentation_masks": {
+    "checked": 512,
+    "pixel_values": {
+      "0": 468322337,
+      "1": 12906959,
+      "2": 785824,
+      "3": 528094,
+      "4": 16536505,
+      "5": 2098389,
+      "6": 3212777,
+      "7": 61114,
+      "8": 557231201
+    },
+    "invalid_masks": [],
+    "size_mismatches": []
+  },
+  "radar_dirs": {
+    "single_frame_csv": {
+      "path": "/home/kaixin/code/ASY-VRNet/dataset/WaterScenes_Full/radar",
+      "exists": true,
+      "files": 54120
+    },
+    "three_frame_csv": {
+      "path": "/home/kaixin/code/ASY-VRNet/dataset/WaterScenes_Full/radar_3_frames",
+      "exists": true,
+      "files": 54120
+    },
+    "five_frame_csv": {
+      "path": "/home/kaixin/code/ASY-VRNet/dataset/WaterScenes_Full/radar_5_frames",
+      "exists": true,
+      "files": 54120
+    },
+    "npz_root": {
+      "path": "/home/kaixin/code/ASY-VRNet/dataset/VOCradar_5_frames",
+      "exists": true,
+      "files": 54120
+    },
+    "npz_coverage": {
+      "expected_ids": 48708,
+      "npz_ids": 54120,
+      "missing_for_train_val": 0
+    }
+  },
+  "model": {
+    "phi": "l",
+    "params_m": 49.8236,
+    "radar_initial_in_channels": 4,
+    "radar_initial_out_channels": 4,
+    "head_cls_out_channels": [
+      7,
+      7,
+      7
+    ],
+    "coc_pretrained": {
+      "path": "/home/kaixin/code/ASY-VRNet/model_data/coc_small-bs128-lr0.001-wd0.05-dp0.0-distillnone-224/model_best.pth.tar",
+      "exists": true,
+      "keys": 228
+    }
+  },
+  "metric_subsets": {
+    "dark_times": [
+      "night",
+      "nightfall"
+    ],
+    "small_area": 1024,
+    "small_area_space": "original",
+    "counts": {
+      "dark": 814,
+      "dim": 1124,
+      "small": 3820
+    },
+    "night_only_count": 175,
+    "nightfall_count": 639,
+    "input_space_small_count_for_comparison": 8475
+  },
+  "end_to_end": {
+    "checked": 16,
+    "failed_ids": [],
+    "max_raw_channel_abs_error": 0.0,
+    "max_dataloader_radar_abs_diff": 0.0,
+    "max_dataloader_box_abs_diff": 2.0345052121228946e-05
+  },
+  "postprocess": {
+    "invariants": {
+      "letterbox_box_roundtrip_error": 0.0001220703125,
+      "empty_nms_is_none": true,
+      "absent_class_iou_is_nan": true,
+      "segmentation_nanmean_object_miou": 80.0,
+      "ok": true
+    },
+    "coco_identity": {
+      "mAP50_95": 99.99999999999999,
+      "AP50": 99.99999999999997,
+      "AR100": 100.0,
+      "ok": true
+    }
+  },
+  "issues": [
+    {
+      "level": "warning",
+      "section": "legacy_scripts",
+      "message": "Legacy Deeplab-only scripts remain for reference, not paper ASY-VRNet evaluation: ['predict_seg.py', 'deeplab.py']"
+    }
+  ]
+}

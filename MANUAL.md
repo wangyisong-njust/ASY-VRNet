@@ -68,7 +68,7 @@ ASY-VRNet/
 │   │   ├── JPEGImages/       # 图像
 │   │   ├── Annotations/      # XML 检测标注
 │   │   └── SegmentationClass/# 分割掩码（PNG）
-│   └── VOCradar/             # 雷达特征图（NPZ 格式）
+│   └── VOCradar_5_frames/    # 5 帧雷达特征图（NPZ 格式）
 │
 ├── logs/                     # 训练输出（权重、loss 曲线）
 └── predict_output/           # 推理结果图片
@@ -123,7 +123,8 @@ dataset/WaterScenes_Full/
 ├── image/               # 54120 张 JPG（1920×1080）
 ├── detection/yolo/      # 每张图对应的 YOLO 格式检测标注
 ├── semantic/SegmentationClass/  # 分割掩码 PNG
-└── radar/               # 每帧的雷达点云 CSV
+├── radar/               # 单帧雷达点云 CSV
+└── radar_5_frames/      # 5 帧聚合雷达点云 CSV（论文复现默认使用）
 ```
 
 ### 3.3 转换为训练格式
@@ -131,26 +132,29 @@ dataset/WaterScenes_Full/
 ```bash
 cd <project-root>
 
+ASY_MAX_SAMPLES=0 \
+WATERSCENES_RADAR_SUBDIR=radar_5_frames \
+ASY_RADAR_NPZ_DIR=VOCradar_5_frames \
 python3 prepare_dataset_full.py
 ```
 
 **该脚本做了什么：**
 - 从 54120 个样本中筛选出四路数据（图像+检测+分割+雷达）都齐全的样本
-- 随机选取 5000 个（可在脚本顶部修改 `MAX_SAMPLES`）
+- 默认使用官方 train/val 划分和全部样本（如需调试小样本，可设置 `ASY_MAX_SAMPLES`）
 - 将 YOLO 格式标注转为 VOC XML 格式
-- 将雷达 CSV 转为 `[4, 512, 512]` 的 NPZ 特征图
-- 按 8:2 划分训练集/验证集
+- 将 5 帧雷达 CSV 转为 `[4, 512, 512]` 的 NPZ 特征图
+- 优先使用 WaterScenes 官方 train/val 划分
 - 生成 `2007_train.txt`、`2007_val.txt`
 
 **输出：**
 ```
 dataset/VOCdevkit/VOC2007/   ← 图像+标注+分割掩码
-dataset/VOCradar/            ← 雷达 NPZ 文件
+dataset/VOCradar_5_frames/   ← 5 帧雷达 NPZ 文件
 2007_train.txt               ← 训练集路径+检测框标注
 2007_val.txt                 ← 验证集路径+检测框标注
 ```
 
-> 转换 5000 样本约需 15 分钟。
+> 全量转换会处理 54120 张图像和对应雷达 CSV，耗时取决于磁盘速度；调试时可临时设置 `ASY_MAX_SAMPLES=5000`。
 
 ---
 
@@ -170,28 +174,28 @@ python3 -m gdown --folder \
 
 ### 4.2 修改训练配置
 
-打开 `train.py`，根据需要修改以下参数（约在第 150-200 行）：
+推荐通过环境变量或 `scripts/run_train_effective_baseline_4gpu.sh` 修改训练配置：
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `UnFreeze_Epoch` | `100` | 总训练轮数，数据多时建议 100-300 |
-| `Unfreeze_batch_size` | `4` | batch 大小，显存不足时调小 |
-| `Init_lr` | `1e-2` | 初始学习率 |
-| `phi` | `'l'` | 模型规模：`nano/tiny/s/m/l`，l 最大最准 |
-| `radar_file_path` | 见文件 | 雷达 NPZ 目录路径 |
-| `VOCdevkit_path` | 见文件 | VOCdevkit 根目录路径 |
+| `ASY_INPUT_SHAPE` | `320,320` | 论文复现输入分辨率 |
+| `ASY_BATCH_SIZE` | `128` | 4 卡全局 batch，可按显存调整 |
+| `ASY_UNFREEZE_EPOCH` | `170` | 当前 effective baseline 总训练轮数 |
+| `ASY_PHI` | `l` | 当前大模型复现配置；严格参数量对齐论文需另设小模型 |
+| `ASY_RADAR_ROOT` | `dataset/VOCradar_5_frames` | 5 帧雷达 NPZ 目录 |
+| `ASY_TASK_LOSS` | `uncertainty` | 多任务不确定性加权 |
 
 ### 4.3 开始训练
 
 ```bash
 cd <project-root>
 
-python3 train.py
+bash scripts/run_train_effective_baseline_4gpu.sh
 ```
 
 训练过程中终端会显示：
 ```
-Epoch 1/100:  50%|█████  | 500/1000 [05:12, detection loss=45.2, segmentation loss=0.82, f score=0.312, lr=0.008]
+Epoch 1/170:  50%|█████  | 148/295 [05:12, detection loss=45.2, segmentation loss=0.82, f score=0.312, lr=0.008]
 ```
 
 | 指标 | 含义 |
@@ -224,14 +228,17 @@ logs/
 ```bash
 cd <project-root>
 
-python3 run_predict.py
+python3 run_predict.py \
+  --model_path logs/best_epoch_weights.pth \
+  --radar_root dataset/VOCradar_5_frames \
+  --input_shape 320 320
 ```
 
 **运行后输出：**
 ```
-验证集共 1000 张图片
-Detection: 100%|██████████| 1000/1000
-检测完成：1000/1000 张已保存到 predict_output/
+验证集共 10824 张图片
+Detection: 100%|██████████| 10824/10824
+检测完成：10824/10824 张已保存到 predict_output/
 ```
 
 结果图保存在 `predict_output/` 目录，文件名格式为 `det_<图片ID>.jpg`。
@@ -241,21 +248,24 @@ Detection: 100%|██████████| 1000/1000
 ```bash
 cd <project-root>
 
-python3 predict.py
+python3 predict.py \
+  --model_path logs/best_epoch_weights.pth \
+  --radar_root dataset/VOCradar_5_frames \
+  --input_shape 320 320
 ```
 
 运行后会提示输入图片路径和图片 ID（用于查找对应雷达文件）。
 
 ### 5.3 修改推理配置
 
-打开 `yolo.py`，找到 `_defaults` 字典（约第 25 行）：
+`yolo.py` 的 `_defaults` 已经与训练/评测主链路对齐，也可以通过环境变量覆盖：
 
 ```python
 _defaults = {
     "model_path"  : 'logs/best_epoch_weights.pth',  # 权重路径
     "classes_path": 'model_data/waterscenes.txt',    # 类别文件
-    "radar_root"  : 'dataset/VOCradar',  # 雷达NPZ目录
-    "input_shape" : [512, 512],                      # 输入分辨率
+    "radar_root"  : 'dataset/VOCradar_5_frames',     # 5帧雷达NPZ目录
+    "input_shape" : [320, 320],                      # 输入分辨率
     "phi"         : 'l',                             # 模型规模（需与训练一致）
     "confidence"  : 0.3,                             # 检测置信度阈值
     "nms_iou"     : 0.5,                             # NMS IoU 阈值
@@ -317,10 +327,10 @@ _defaults = {
 
 | 数据 | 格式 | 说明 |
 |------|------|------|
-| RGB 图像 | JPG，任意分辨率 | 训练时统一缩放到 512×512 |
+| RGB 图像 | JPG，任意分辨率 | 训练时统一 letterbox 到 320×320 |
 | 检测标注 | YOLO txt（`class cx cy w h`，归一化） 或 VOC XML | 每张图一个文件 |
 | 分割掩码 | PNG，灰度图 | 像素值 = 类别 ID（0=背景） |
-| 雷达点云 | NPZ，shape `[4, H, W]`（range/doppler/elevation/power） | 与图像同名 |
+| 雷达点云 | NPZ，shape `[4, H, W]`（磁盘顺序 range/doppler/elevation/power） | 与图像同名；读取时重排为论文 REVP |
 
 ### 7.2 替换为自定义数据集
 
@@ -341,7 +351,7 @@ my_dataset/
 ```bash
 python3 radar_csv_to_npz.py \
   --csv_dir my_dataset/radar/ \
-  --out_dir dataset/VOCradar/
+  --out_dir dataset/VOCradar_5_frames/
 ```
 
 CSV 文件需包含列：`u`（像素列）、`v`（像素行）、`range`、`doppler`、`elevation`、`power`。
@@ -390,7 +400,7 @@ self.net = EfficientVRNet(num_classes=self.num_classes, num_seg_classes=9, ...)
 
 ```bash
 cd <project-root>
-python3 train.py
+bash scripts/run_train_effective_baseline_4gpu.sh
 ```
 
 ### 7.3 只换检测类别（保留分割结构）
@@ -427,7 +437,7 @@ pip install timm==1.0.17
 
 修改 `train.py`：
 ```python
-Unfreeze_batch_size = 2   # 从4改为2
+ASY_BATCH_SIZE=64 bash scripts/run_train_effective_baseline_4gpu.sh
 ```
 
 ### Q: 训练速度很慢
@@ -454,10 +464,10 @@ python3 -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device
 cd <project-root>
 
 # 2. 转换数据集
-python3 prepare_dataset_full.py
+ASY_MAX_SAMPLES=0 WATERSCENES_RADAR_SUBDIR=radar_5_frames ASY_RADAR_NPZ_DIR=VOCradar_5_frames python3 prepare_dataset_full.py
 
 # 3. 训练
-python3 train.py
+bash scripts/run_train_effective_baseline_4gpu.sh
 
 # 4. 批量推理
 python3 run_predict.py

@@ -13,7 +13,7 @@ CSV 列格式（来自 WaterScenes 数据集）:
   通道 3 = power
 
 说明：
-  仓库内已有 VOCradar*.npz 使用 range,doppler,elevation,power 的存储顺序。
+  仓库内已有雷达 NPZ 使用 range,doppler,elevation,power 的存储顺序。
   训练/评测读取时会通过 utils/radar_utils.py 重排成论文使用的
   range,elevation,velocity,power(REVP) 顺序，避免旧数据和新转换数据不一致。
 """

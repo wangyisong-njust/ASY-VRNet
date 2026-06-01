@@ -14,7 +14,7 @@ WaterScenes 完整数据集准备脚本
     Annotations/    *.xml
     SegmentationClass/ *.png
     ImageSets/Main/  train.txt, val.txt
-  VOCradar/         *.npz  [4, 512, 512]
+  VOCradar_5_frames/ *.npz  [4, 512, 512]
   2007_train.txt
   2007_val.txt
 """
@@ -35,11 +35,12 @@ PROJECT_ROOT = Path(os.environ.get("ASY_PROJECT_ROOT", Path(__file__).resolve().
 FULL_DIR     = Path(os.environ.get("WATERSCENES_FULL_DIR", PROJECT_ROOT / "dataset" / "WaterScenes_Full"))
 OUTPUT_DIR   = Path(os.environ.get("ASY_DATASET_DIR", PROJECT_ROOT / "dataset"))
 VOC_DIR      = OUTPUT_DIR / "VOCdevkit" / "VOC2007"
-RADAR_DIR    = OUTPUT_DIR / "VOCradar"
+RADAR_SUBDIR = os.environ.get("WATERSCENES_RADAR_SUBDIR", "radar_5_frames")
+RADAR_DIR    = OUTPUT_DIR / os.environ.get("ASY_RADAR_NPZ_DIR", "VOCradar_5_frames")
 
 IMG_W, IMG_H   = 1920, 1080
 FEAT_W, FEAT_H = 512, 512
-MAX_SAMPLES    = int(os.environ.get("ASY_MAX_SAMPLES", "5000"))   # 全部用可传 0
+MAX_SAMPLES    = int(os.environ.get("ASY_MAX_SAMPLES", "0"))   # 全部用可传 0
 RANDOM_SEED    = 42
 
 CLASSES = ['pier', 'buoy', 'sailor', 'ship', 'boat', 'vessel', 'kayak']
@@ -116,7 +117,7 @@ def csv_to_npz(csv_path: Path, out_path: Path):
     df = df.sort_values('power', ascending=True)
     us, vs = df['us'].values, df['vs'].values
     feature_map[0, vs, us] = df['range'].values.astype(np.float32)
-    # Keep the on-disk order compatible with the existing VOCradar*.npz files.
+    # Keep the on-disk order compatible with the existing radar NPZ files.
     # The loader remaps this to paper REVP order before feeding the model.
     feature_map[1, vs, us] = df['doppler'].values.astype(np.float32)
     feature_map[2, vs, us] = df['elevation'].values.astype(np.float32)
@@ -147,7 +148,12 @@ def main():
     img_dir = FULL_DIR / "image"
     det_dir = FULL_DIR / "detection" / "yolo"
     seg_dir = FULL_DIR / "semantic" / "SegmentationClass"
-    rad_dir = FULL_DIR / "radar"
+    rad_dir = FULL_DIR / RADAR_SUBDIR
+    if not rad_dir.exists() and RADAR_SUBDIR != "radar":
+        fallback = FULL_DIR / "radar"
+        if fallback.exists():
+            print(f"[WARN] {rad_dir} 不存在，回退到单帧雷达目录 {fallback}")
+            rad_dir = fallback
 
     # 以 image 目录为基准，找出四路数据都齐全的样本
     all_stems = sorted([p.stem for p in img_dir.glob("*.jpg")])

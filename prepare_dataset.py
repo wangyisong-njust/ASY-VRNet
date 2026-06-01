@@ -14,7 +14,7 @@ WaterScenes 样本数据集准备脚本
     Annotations/    *.xml  (VOC XML 检测标注)
     SegmentationClass/ *.png
     ImageSets/Main/  train.txt, val.txt
-  VOCradar/         *.npz  [4, 512, 512]
+  VOCradar_5_frames/ *.npz  [4, 512, 512]
   2007_train.txt    (检测训练标注)
   2007_val.txt
 """
@@ -36,7 +36,8 @@ PROJECT_ROOT = Path(os.environ.get("ASY_PROJECT_ROOT", Path(__file__).resolve().
 SAMPLE_DIR   = Path(os.environ.get("WATERSCENES_SAMPLE_DIR", PROJECT_ROOT / "dataset" / "WaterScenes_Samples"))
 OUTPUT_DIR   = Path(os.environ.get("ASY_DATASET_DIR", PROJECT_ROOT / "dataset"))
 VOC_DIR      = OUTPUT_DIR / "VOCdevkit" / "VOC2007"
-RADAR_DIR    = OUTPUT_DIR / "VOCradar"
+RADAR_SUBDIR = os.environ.get("WATERSCENES_RADAR_SUBDIR", "radar_5_frames")
+RADAR_DIR    = OUTPUT_DIR / os.environ.get("ASY_RADAR_NPZ_DIR", "VOCradar_5_frames")
 
 IMG_W, IMG_H = 1920, 1080   # 原图分辨率
 FEAT_W, FEAT_H = 512, 512   # 雷达特征图目标分辨率
@@ -119,7 +120,7 @@ def csv_to_npz(csv_path: Path, out_path: Path):
     us = df['us'].values
     vs = df['vs'].values
     feature_map[0, vs, us] = df['range'].values.astype(np.float32)
-    # Keep the on-disk order compatible with the existing VOCradar*.npz files.
+    # Keep the on-disk order compatible with the existing radar NPZ files.
     # The loader remaps this to paper REVP order before feeding the model.
     feature_map[1, vs, us] = df['doppler'].values.astype(np.float32)
     feature_map[2, vs, us] = df['elevation'].values.astype(np.float32)
@@ -155,7 +156,12 @@ def main():
     img_dir  = SAMPLE_DIR / "image"
     det_dir  = SAMPLE_DIR / "detection" / "yolo"
     seg_dir  = SAMPLE_DIR / "semantic" / "SegmentationClass"
-    rad_dir  = SAMPLE_DIR / "radar"
+    rad_dir = SAMPLE_DIR / RADAR_SUBDIR
+    if not rad_dir.exists() and RADAR_SUBDIR != "radar":
+        fallback = SAMPLE_DIR / "radar"
+        if fallback.exists():
+            print(f"[WARN] {rad_dir} 不存在，回退到单帧雷达目录 {fallback}")
+            rad_dir = fallback
 
     stems = sorted([p.stem for p in img_dir.glob("*.jpg")])
     print(f"共 {len(stems)} 个样本")

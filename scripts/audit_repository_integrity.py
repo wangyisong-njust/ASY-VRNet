@@ -337,6 +337,10 @@ def audit_high_risk_defaults(issues: list[Issue]) -> dict:
         "eval_paper_metrics.py": ["VOCradar_5_frames", "small_area_space", "nightfall", "uncertainty"],
         "scripts/check_dataset.py": ["VOCradar_5_frames"],
         "run_predict.py": ["VOCradar_5_frames"],
+        "prepare_dataset.py": ["VOCradar_5_frames", "radar_5_frames"],
+        "prepare_dataset_full.py": ["VOCradar_5_frames", "radar_5_frames", "ASY_MAX_SAMPLES", '"0"'],
+        "deeplab.py": ["VOCradar_5_frames", "[320, 320]"],
+        "MANUAL.md": ["VOCradar_5_frames", "radar_5_frames", "320,320"],
         "scripts/run_train_4gpu.sh": ["VOCradar_5_frames", "ASY_RADAR_PRESERVE_POINTS"],
     }
     result = {}
