@@ -116,6 +116,8 @@ def csv_to_npz(csv_path: Path, out_path: Path):
     df = df.sort_values('power', ascending=True)
     us, vs = df['us'].values, df['vs'].values
     feature_map[0, vs, us] = df['range'].values.astype(np.float32)
+    # Keep the on-disk order compatible with the existing VOCradar*.npz files.
+    # The loader remaps this to paper REVP order before feeding the model.
     feature_map[1, vs, us] = df['doppler'].values.astype(np.float32)
     feature_map[2, vs, us] = df['elevation'].values.astype(np.float32)
     feature_map[3, vs, us] = df['power'].values.astype(np.float32)

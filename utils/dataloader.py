@@ -45,7 +45,8 @@ transform_fog = A.Compose(
 class YoloDataset(Dataset):
     def __init__(self, annotation_lines, input_shape, num_classes, num_classes_seg, epoch_length, radar_root, \
                  mosaic, mixup, mosaic_prob, mixup_prob, seg_dataset_path, train, special_aug_ratio=0.7,
-                 radar_align_mode="letterbox", radar_normalize=False):
+                 radar_align_mode="letterbox", radar_normalize=False, radar_preserve_points=None,
+                 radar_source_order=None, radar_target_order=None):
         super(YoloDataset, self).__init__()
 
         # ------------------------- 通用 --------------------------- #
@@ -75,6 +76,9 @@ class YoloDataset(Dataset):
         self.radar_root = radar_root
         self.radar_align_mode = radar_align_mode
         self.radar_normalize = radar_normalize
+        self.radar_preserve_points = radar_preserve_points
+        self.radar_source_order = radar_source_order
+        self.radar_target_order = radar_target_order
         # ---------------------------------------------------------- #
 
     def __len__(self):
@@ -137,6 +141,9 @@ class YoloDataset(Dataset):
             input_shape,
             normalize=self.radar_normalize,
             align_mode=self.radar_align_mode,
+            source_order=self.radar_source_order,
+            target_order=self.radar_target_order,
+            preserve_points=self.radar_preserve_points,
         )
         # ------------------------------#
         #   获得预测框

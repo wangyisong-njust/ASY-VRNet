@@ -50,6 +50,9 @@ class YOLO(object):
         "radar_in_channels": int(os.environ.get("ASY_RADAR_CHANNELS", "4")),
         "radar_align_mode": os.environ.get("ASY_RADAR_ALIGN_MODE", "letterbox"),
         "radar_normalize": env_bool("ASY_RADAR_NORMALIZE", False),
+        "radar_preserve_points": env_bool("ASY_RADAR_PRESERVE_POINTS", True),
+        "radar_source_order": os.environ.get("ASY_RADAR_SOURCE_ORDER", "range,doppler,elevation,power"),
+        "radar_target_order": os.environ.get("ASY_RADAR_TARGET_ORDER", "range,elevation,velocity,power"),
         "fusion_mode": os.environ.get("ASY_FUSION_MODE", "baseline"),
         "radar_dropout": float(os.environ.get("ASY_RADAR_DROPOUT", "0.0")),
         "task_loss_mode": os.environ.get("ASY_TASK_LOSS", "sum"),
@@ -157,6 +160,9 @@ class YOLO(object):
             self.input_shape,
             normalize=self.radar_normalize,
             align_mode=self.radar_align_mode,
+            source_order=self.radar_source_order,
+            target_order=self.radar_target_order,
+            preserve_points=self.radar_preserve_points,
         )
         return radar_to_tensor(radar_data, device=self._device()).float()
 

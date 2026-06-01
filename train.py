@@ -129,6 +129,9 @@ if __name__ == "__main__":
     radar_in_channels = env_int("ASY_RADAR_CHANNELS", 4)
     radar_align_mode = os.environ.get("ASY_RADAR_ALIGN_MODE", "letterbox").lower()
     radar_normalize = env_bool("ASY_RADAR_NORMALIZE", False)
+    radar_preserve_points = env_bool("ASY_RADAR_PRESERVE_POINTS", True)
+    radar_source_order = os.environ.get("ASY_RADAR_SOURCE_ORDER", "range,doppler,elevation,power")
+    radar_target_order = os.environ.get("ASY_RADAR_TARGET_ORDER", "range,elevation,velocity,power")
     fusion_mode = os.environ.get("ASY_FUSION_MODE", "baseline").lower()
     radar_dropout = env_float("ASY_RADAR_DROPOUT", 0.0)
     task_loss_mode = os.environ.get("ASY_TASK_LOSS", "sum").lower()
@@ -494,6 +497,9 @@ if __name__ == "__main__":
         radar_in_channels=radar_in_channels, fusion_mode=fusion_mode,
         radar_align_mode=radar_align_mode,
         radar_normalize=radar_normalize,
+        radar_preserve_points=radar_preserve_points,
+        radar_source_order=radar_source_order,
+        radar_target_order=radar_target_order,
         radar_dropout=radar_dropout, task_loss_mode=task_loss_mode
     )
     # ---------------------------------------------------------#
@@ -597,7 +603,10 @@ if __name__ == "__main__":
                                     train=True, special_aug_ratio=0, radar_root=radar_file_path,
                                     num_classes_seg=num_classes_seg, seg_dataset_path=VOCdevkit_path,
                                     radar_align_mode=radar_align_mode,
-                                    radar_normalize=radar_normalize)
+                                    radar_normalize=radar_normalize,
+                                    radar_preserve_points=radar_preserve_points,
+                                    radar_source_order=radar_source_order,
+                                    radar_target_order=radar_target_order)
 
         val_dataset = YoloDataset(annotation_lines=val_lines, input_shape=input_shape, num_classes=num_classes,
                                   epoch_length=UnFreeze_Epoch, \
@@ -605,7 +614,10 @@ if __name__ == "__main__":
                                   special_aug_ratio=0, radar_root=radar_file_path,
                                   num_classes_seg=num_classes_seg, seg_dataset_path=VOCdevkit_path,
                                   radar_align_mode=radar_align_mode,
-                                  radar_normalize=radar_normalize)
+                                  radar_normalize=radar_normalize,
+                                  radar_preserve_points=radar_preserve_points,
+                                  radar_source_order=radar_source_order,
+                                  radar_target_order=radar_target_order)
 
         # ---------------------------------------#
         #   构建分割数据集加载器。
@@ -654,12 +666,18 @@ if __name__ == "__main__":
             eval_callback = EvalCallback(model, input_shape, class_names, num_classes, val_lines, log_dir, Cuda, \
                                          eval_flag=eval_flag, period=eval_period, radar_path=radar_file_path,
                                          local_rank=local_rank, radar_align_mode=radar_align_mode,
-                                         radar_normalize=radar_normalize)
+                                         radar_normalize=radar_normalize,
+                                         radar_preserve_points=radar_preserve_points,
+                                         radar_source_order=radar_source_order,
+                                         radar_target_order=radar_target_order)
             eval_callback_seg = EvalCallback_seg(model, input_shape, num_classes_seg, val_lines, VOCdevkit_path,
                                                  log_dir_seg, Cuda, eval_flag=eval_flag, period=eval_period,
                                                  radar_path=radar_file_path, local_rank=local_rank,
                                                  radar_align_mode=radar_align_mode,
-                                                 radar_normalize=radar_normalize)
+                                                 radar_normalize=radar_normalize,
+                                                 radar_preserve_points=radar_preserve_points,
+                                                 radar_source_order=radar_source_order,
+                                                 radar_target_order=radar_target_order)
         else:
             eval_callback = None
             eval_callback_seg = None

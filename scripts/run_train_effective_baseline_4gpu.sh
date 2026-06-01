@@ -15,7 +15,8 @@ if [[ -z "${PYTHON}" ]]; then
     echo "No Python interpreter found. Set PYTHON=/path/to/python before running."
     exit 1
 fi
-EXP_NAME=${EXP_NAME:-paper_repro_phi_nano_5frames_bs16_100e_320_official_radarnorm0}
+
+EXP_NAME=${EXP_NAME:-effective_phi_l_5frames_bs128_e170_320_revp}
 MASTER_PORT=${MASTER_PORT:-29500}
 
 export PYTHONNOUSERSITE=${PYTHONNOUSERSITE:-1}
@@ -25,17 +26,19 @@ export ASY_SYNC_BN=${ASY_SYNC_BN:-1}
 export ASY_FP16=${ASY_FP16:-1}
 
 export ASY_INPUT_SHAPE=${ASY_INPUT_SHAPE:-320,320}
-export ASY_BATCH_SIZE=${ASY_BATCH_SIZE:-16}
-export ASY_NUM_WORKERS=${ASY_NUM_WORKERS:-16}
-export ASY_UNFREEZE_EPOCH=${ASY_UNFREEZE_EPOCH:-100}
+export ASY_BATCH_SIZE=${ASY_BATCH_SIZE:-128}
+export ASY_NUM_WORKERS=${ASY_NUM_WORKERS:-24}
+export ASY_UNFREEZE_EPOCH=${ASY_UNFREEZE_EPOCH:-170}
 export ASY_SAVE_PERIOD=${ASY_SAVE_PERIOD:-10}
-export ASY_PHI=${ASY_PHI:-nano}
+export ASY_PHI=${ASY_PHI:-l}
 
-# train.py scales Init_lr by global_batch / 64. With global batch 16,
-# ASY_INIT_LR=0.04 gives an effective initial SGD LR of 0.01.
-export ASY_INIT_LR=${ASY_INIT_LR:-0.04}
+# train.py scales Init_lr by global_batch / 64. With global batch 128,
+# ASY_INIT_LR=0.005 gives an effective SGD LR of 0.01.
+export ASY_INIT_LR=${ASY_INIT_LR:-0.005}
 export ASY_LR_DECAY=${ASY_LR_DECAY:-cos}
 export ASY_OPTIMIZER=${ASY_OPTIMIZER:-sgd}
+export ASY_MOMENTUM=${ASY_MOMENTUM:-0.937}
+export ASY_WEIGHT_DECAY=${ASY_WEIGHT_DECAY:-0.0005}
 export ASY_FREEZE_TRAIN=${ASY_FREEZE_TRAIN:-0}
 
 export ASY_EVAL=${ASY_EVAL:-0}
@@ -57,7 +60,9 @@ export ASY_RADAR_TARGET_ORDER=${ASY_RADAR_TARGET_ORDER:-range,elevation,velocity
 
 mkdir -p "${ASY_SAVE_DIR}" "${ASY_SAVE_DIR_SEG}"
 
-"$PYTHON" scripts/check_dataset.py
+"${PYTHON}" scripts/check_dataset.py
+"${PYTHON}" scripts/audit_detection_pipeline.py --sample_limit 256 --skip_model
+"${PYTHON}" scripts/audit_preprocessing_alignment.py --samples 64 --visuals 8
 
 stamp=$(date +%Y%m%d_%H%M%S)
-"$PYTHON" -m torch.distributed.run --master_port="${MASTER_PORT}" --nproc_per_node=4 train.py 2>&1 | tee "${ASY_SAVE_DIR}/train_${stamp}.log"
+"${PYTHON}" -m torch.distributed.run --master_port="${MASTER_PORT}" --nproc_per_node=4 train.py 2>&1 | tee "${ASY_SAVE_DIR}/train_${stamp}.log"

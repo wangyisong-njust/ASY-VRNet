@@ -31,6 +31,9 @@ PHI=${PHI:-${ASY_PHI:-l}}
 RADAR_CHANNELS=${RADAR_CHANNELS:-4}
 RADAR_ALIGN_MODE=${RADAR_ALIGN_MODE:-${ASY_RADAR_ALIGN_MODE:-letterbox}}
 RADAR_NORMALIZE=${RADAR_NORMALIZE:-${ASY_RADAR_NORMALIZE:-0}}
+RADAR_PRESERVE_POINTS=${RADAR_PRESERVE_POINTS:-${ASY_RADAR_PRESERVE_POINTS:-1}}
+RADAR_SOURCE_ORDER=${RADAR_SOURCE_ORDER:-${ASY_RADAR_SOURCE_ORDER:-range,doppler,elevation,power}}
+RADAR_TARGET_ORDER=${RADAR_TARGET_ORDER:-${ASY_RADAR_TARGET_ORDER:-range,elevation,velocity,power}}
 FUSION_MODE=${FUSION_MODE:-baseline}
 TASK_LOSS=${TASK_LOSS:-uncertainty}
 CONFIDENCE=${CONFIDENCE:-0.05}
@@ -45,6 +48,9 @@ export ASY_INFO_CSV="${INFO_CSV}"
 export ASY_RADAR_CHANNELS="${RADAR_CHANNELS}"
 export ASY_RADAR_ALIGN_MODE="${RADAR_ALIGN_MODE}"
 export ASY_RADAR_NORMALIZE="${RADAR_NORMALIZE}"
+export ASY_RADAR_PRESERVE_POINTS="${RADAR_PRESERVE_POINTS}"
+export ASY_RADAR_SOURCE_ORDER="${RADAR_SOURCE_ORDER}"
+export ASY_RADAR_TARGET_ORDER="${RADAR_TARGET_ORDER}"
 export ASY_FUSION_MODE="${FUSION_MODE}"
 export ASY_RADAR_DROPOUT=${ASY_RADAR_DROPOUT:-0}
 export ASY_TASK_LOSS="${TASK_LOSS}"
@@ -77,6 +83,10 @@ run_eval() {
     if [[ "${RADAR_NORMALIZE}" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]]; then
         radar_normalize_arg=--radar_normalize
     fi
+    local radar_preserve_points_arg=--radar_preserve_points
+    if [[ "${RADAR_PRESERVE_POINTS}" =~ ^(0|false|FALSE|no|NO|off|OFF)$ ]]; then
+        radar_preserve_points_arg=--no_radar_preserve_points
+    fi
 
     if [[ ! -f "${weight}" ]]; then
         log "Missing checkpoint: ${weight}"
@@ -97,7 +107,10 @@ run_eval() {
         --num_seg_classes 9 \
         --radar_channels "${RADAR_CHANNELS}" \
         --radar_align_mode "${RADAR_ALIGN_MODE}" \
+        --radar_source_order "${RADAR_SOURCE_ORDER}" \
+        --radar_target_order "${RADAR_TARGET_ORDER}" \
         "${radar_normalize_arg}" \
+        "${radar_preserve_points_arg}" \
         --fusion_mode "${FUSION_MODE}" \
         --task_loss "${TASK_LOSS}" \
         --confidence "${CONFIDENCE}" \

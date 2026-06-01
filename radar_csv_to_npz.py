@@ -8,9 +8,14 @@ CSV 列格式（来自 WaterScenes 数据集）:
 输出 NPZ:
   arr_0.shape = (4, img_h, img_w)
   通道 0 = range
-  通道 1 = doppler (velocity)
+  通道 1 = doppler
   通道 2 = elevation
   通道 3 = power
+
+说明：
+  仓库内已有 VOCradar*.npz 使用 range,doppler,elevation,power 的存储顺序。
+  训练/评测读取时会通过 utils/radar_utils.py 重排成论文使用的
+  range,elevation,velocity,power(REVP) 顺序，避免旧数据和新转换数据不一致。
 """
 
 import os

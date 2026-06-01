@@ -94,7 +94,7 @@ class EvalCallback():
     def __init__(self, net, input_shape, class_names, num_classes, val_lines, log_dir, cuda, local_rank, radar_path, \
                  map_out_path=".temp_map_out", max_boxes=100, confidence=0.05, nms_iou=0.5, letterbox_image=True,
                  MINOVERLAP=0.5, eval_flag=True, period=1, radar_align_mode="letterbox",
-                 radar_normalize=False):
+                 radar_normalize=False, radar_preserve_points=None, radar_source_order=None, radar_target_order=None):
         super(EvalCallback, self).__init__()
 
         self.net = net
@@ -116,6 +116,9 @@ class EvalCallback():
         self.radar_path = radar_path
         self.radar_align_mode = radar_align_mode
         self.radar_normalize = radar_normalize
+        self.radar_preserve_points = radar_preserve_points
+        self.radar_source_order = radar_source_order
+        self.radar_target_order = radar_target_order
 
         self.maps = [0]
         self.epoches = [0]
@@ -216,6 +219,9 @@ class EvalCallback():
                     self.input_shape,
                     normalize=self.radar_normalize,
                     align_mode=self.radar_align_mode,
+                    source_order=self.radar_source_order,
+                    target_order=self.radar_target_order,
+                    preserve_points=self.radar_preserve_points,
                 )
                 device = torch.device("cuda", self.local_rank) if self.cuda else torch.device("cpu")
                 radar_data = radar_to_tensor(radar_data, device=device)

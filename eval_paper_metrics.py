@@ -72,6 +72,10 @@ def parse_args():
     parser.add_argument("--radar_align_mode", default=os.environ.get("ASY_RADAR_ALIGN_MODE", "letterbox"))
     parser.add_argument("--radar_normalize", action="store_true", default=env_bool("ASY_RADAR_NORMALIZE", False))
     parser.add_argument("--no_radar_normalize", action="store_false", dest="radar_normalize")
+    parser.add_argument("--radar_preserve_points", action="store_true", default=env_bool("ASY_RADAR_PRESERVE_POINTS", True))
+    parser.add_argument("--no_radar_preserve_points", action="store_false", dest="radar_preserve_points")
+    parser.add_argument("--radar_source_order", default=os.environ.get("ASY_RADAR_SOURCE_ORDER", "range,doppler,elevation,power"))
+    parser.add_argument("--radar_target_order", default=os.environ.get("ASY_RADAR_TARGET_ORDER", "range,elevation,velocity,power"))
     parser.add_argument("--fusion_mode", default=os.environ.get("ASY_FUSION_MODE", "baseline"))
     parser.add_argument("--radar_dropout", type=float, default=float(os.environ.get("ASY_RADAR_DROPOUT", "0.0")))
     parser.add_argument("--task_loss", default=os.environ.get("ASY_TASK_LOSS", "sum"))
@@ -108,6 +112,9 @@ def save_segmentation_png(model, image, image_id, args, pred_dir):
         args.input_shape,
         normalize=args.radar_normalize,
         align_mode=args.radar_align_mode,
+        source_order=args.radar_source_order,
+        target_order=args.radar_target_order,
+        preserve_points=args.radar_preserve_points,
     )
     device = torch.device("cuda" if args.cuda and torch.cuda.is_available() else "cpu")
     images = torch.from_numpy(image_data).to(device)
@@ -273,6 +280,9 @@ def main():
     args.radar_root = str(resolve_path(args.radar_root))
     args.vocdevkit_path = str(resolve_path(args.vocdevkit_path))
     args.info_csv = str(resolve_path(args.info_csv))
+    os.environ["ASY_RADAR_SOURCE_ORDER"] = args.radar_source_order
+    os.environ["ASY_RADAR_TARGET_ORDER"] = args.radar_target_order
+    os.environ["ASY_RADAR_PRESERVE_POINTS"] = "1" if args.radar_preserve_points else "0"
     class_names, num_classes = get_classes(args.classes_path)
     with open(args.val_txt, encoding="utf-8") as f:
         val_lines = [line.strip() for line in f if line.strip()]
