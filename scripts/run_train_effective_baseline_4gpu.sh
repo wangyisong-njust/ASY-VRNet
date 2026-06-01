@@ -61,6 +61,7 @@ export ASY_RADAR_TARGET_ORDER=${ASY_RADAR_TARGET_ORDER:-range,elevation,velocity
 mkdir -p "${ASY_SAVE_DIR}" "${ASY_SAVE_DIR_SEG}"
 
 "${PYTHON}" scripts/check_dataset.py
+"${PYTHON}" scripts/audit_repository_integrity.py --mask_samples 512 --e2e_samples 16
 "${PYTHON}" scripts/audit_detection_pipeline.py --sample_limit 256 --skip_model
 "${PYTHON}" scripts/audit_preprocessing_alignment.py --samples 64 --visuals 8
 "${PYTHON}" scripts/audit_end_to_end_pipeline.py --samples 16

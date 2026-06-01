@@ -2,6 +2,7 @@
 # -*- coding:utf-8 -*-
 # Copyright (c) Megvii, Inc. and its affiliates.
 import math
+import os
 from copy import deepcopy
 from functools import partial
 
@@ -107,7 +108,11 @@ class YOLOLoss(nn.Module):
         grid = self.grids[k]
         hsize, wsize = output.shape[-2:]
         if grid.shape[2:4] != output.shape[2:4]:
-            yv, xv = torch.meshgrid([torch.arange(hsize), torch.arange(wsize)])
+            yv, xv = torch.meshgrid(
+                torch.arange(hsize, device=output.device),
+                torch.arange(wsize, device=output.device),
+                indexing="ij",
+            )
             grid = torch.stack((xv, yv), 2).view(1, hsize, wsize, 2).type(output.type())
             self.grids[k] = grid
         grid = grid.view(1, -1, 2)
@@ -173,7 +178,8 @@ class YOLOLoss(nn.Module):
                     cls_preds_per_image, obj_preds_per_image,
                     expanded_strides, x_shifts, y_shifts,
                 )
-                torch.cuda.empty_cache()
+                if os.environ.get("ASY_EMPTY_CACHE_EACH_ASSIGNMENT", "0").lower() in {"1", "true", "yes", "on"}:
+                    torch.cuda.empty_cache()
 
 
 

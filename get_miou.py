@@ -1,64 +1,98 @@
+import argparse
 import os
 from pathlib import Path
 
 from PIL import Image
 from tqdm import tqdm
 
-from deeplab import DeeplabV3
+from eval_paper_metrics import env_bool, resolve_path, save_segmentation_png
 from utils_seg.utils_metrics import compute_mIoU, show_results
+from yolo import YOLO
 
-'''
-进行指标评估需要注意以下几点：
-1、该文件生成的图为灰度图，因为值比较小，按照PNG形式的图看是没有显示效果的，所以看到近似全黑的图是正常的。
-2、该文件计算的是验证集的miou，当前该库将测试集当作验证集使用，不单独划分测试集
-'''
+
+PROJECT_ROOT = Path(__file__).resolve().parent
+SEG_CLASSES = ["background", "ship", "buoy", "sailor", "pier", "boat", "vessel", "kayak", "water"]
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Evaluate ASY-VRNet fused segmentation mIoU on a WaterScenes split."
+    )
+    parser.add_argument("--val_txt", default="2007_val.txt")
+    parser.add_argument("--model_path", default=os.environ.get("ASY_MODEL_PATH", "logs/best_epoch_weights.pth"))
+    parser.add_argument("--classes_path", default=os.environ.get("ASY_CLASSES_PATH", "model_data/waterscenes.txt"))
+    parser.add_argument("--radar_root", default=os.environ.get("ASY_RADAR_ROOT", "dataset/VOCradar_5_frames"))
+    parser.add_argument("--vocdevkit_path", default=os.environ.get("ASY_VOCDEVKIT", "dataset/VOCdevkit"))
+    parser.add_argument("--out_dir", default="miou_out")
+    parser.add_argument("--phi", default=os.environ.get("ASY_PHI", "l"))
+    parser.add_argument("--input_shape", type=int, nargs=2, default=[320, 320])
+    parser.add_argument("--num_seg_classes", type=int, default=9)
+    parser.add_argument("--radar_channels", type=int, default=int(os.environ.get("ASY_RADAR_CHANNELS", "4")))
+    parser.add_argument("--radar_align_mode", default=os.environ.get("ASY_RADAR_ALIGN_MODE", "letterbox"))
+    parser.add_argument("--radar_normalize", action="store_true", default=env_bool("ASY_RADAR_NORMALIZE", False))
+    parser.add_argument("--no_radar_normalize", action="store_false", dest="radar_normalize")
+    parser.add_argument("--radar_preserve_points", action="store_true", default=env_bool("ASY_RADAR_PRESERVE_POINTS", True))
+    parser.add_argument("--no_radar_preserve_points", action="store_false", dest="radar_preserve_points")
+    parser.add_argument("--radar_source_order", default=os.environ.get("ASY_RADAR_SOURCE_ORDER", "range,doppler,elevation,power"))
+    parser.add_argument("--radar_target_order", default=os.environ.get("ASY_RADAR_TARGET_ORDER", "range,elevation,velocity,power"))
+    parser.add_argument("--fusion_mode", default=os.environ.get("ASY_FUSION_MODE", "baseline"))
+    parser.add_argument("--task_loss", default=os.environ.get("ASY_TASK_LOSS", "uncertainty"))
+    parser.add_argument("--cuda", action="store_true", default=True)
+    parser.add_argument("--no_cuda", action="store_false", dest="cuda")
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    args.val_txt = str(resolve_path(args.val_txt))
+    args.model_path = str(resolve_path(args.model_path))
+    args.classes_path = str(resolve_path(args.classes_path))
+    args.radar_root = str(resolve_path(args.radar_root))
+    args.vocdevkit_path = str(resolve_path(args.vocdevkit_path))
+    args.out_dir = str(resolve_path(args.out_dir))
+
+    pred_dir = Path(args.out_dir) / "detection-results"
+    pred_dir.mkdir(parents=True, exist_ok=True)
+
+    with open(args.val_txt, encoding="utf-8") as f:
+        lines = [line.strip() for line in f if line.strip()]
+
+    model = YOLO(
+        model_path=args.model_path,
+        classes_path=args.classes_path,
+        radar_root=args.radar_root,
+        input_shape=args.input_shape,
+        num_seg_classes=args.num_seg_classes,
+        radar_in_channels=args.radar_channels,
+        radar_align_mode=args.radar_align_mode,
+        radar_normalize=args.radar_normalize,
+        radar_preserve_points=args.radar_preserve_points,
+        radar_source_order=args.radar_source_order,
+        radar_target_order=args.radar_target_order,
+        fusion_mode=args.fusion_mode,
+        task_loss_mode=args.task_loss,
+        phi=args.phi,
+        cuda=args.cuda,
+    )
+
+    image_ids = []
+    for line in tqdm(lines, desc="Segmentation"):
+        image_path = resolve_path(line.split()[0])
+        image_id = image_path.stem
+        image_ids.append(image_id)
+        image = Image.open(image_path)
+        save_segmentation_png(model, image, image_id, args, str(pred_dir))
+
+    gt_dir = Path(args.vocdevkit_path) / "VOC2007" / "SegmentationClass"
+    hist, ious, pa_recall, precision = compute_mIoU(
+        str(gt_dir),
+        str(pred_dir),
+        image_ids,
+        args.num_seg_classes,
+        SEG_CLASSES,
+    )
+    show_results(args.out_dir, hist, ious, pa_recall, precision, SEG_CLASSES)
+
+
 if __name__ == "__main__":
-    PROJECT_ROOT = Path(__file__).resolve().parent
-    #---------------------------------------------------------------------------#
-    #   miou_mode用于指定该文件运行时计算的内容
-    #   miou_mode为0代表整个miou计算流程，包括获得预测结果、计算miou。
-    #   miou_mode为1代表仅仅获得预测结果。
-    #   miou_mode为2代表仅仅计算miou。
-    #---------------------------------------------------------------------------#
-    miou_mode       = 0
-    #------------------------------#
-    #   分类个数+1、如2+1
-    #------------------------------#
-    num_classes     = 9
-    #--------------------------------------------#
-    #   区分的种类，和json_to_dataset里面的一样
-    #--------------------------------------------#
-    name_classes    = ["background", "ship", "buoy", "sailor", "pier", "boat", "vessel", "kayak", "water"]
-    # name_classes    = ["_background_","cat","dog"]
-    #-------------------------------------------------------#
-    #   指向VOC数据集所在的文件夹
-    #   默认指向根目录下的VOC数据集
-    #-------------------------------------------------------#
-    VOCdevkit_path  = os.environ.get("ASY_VOCDEVKIT", str(PROJECT_ROOT / "dataset" / "VOCdevkit"))
-
-    image_ids       = open(os.path.join(VOCdevkit_path, "VOC2007/ImageSets/Segmentation/val.txt"),'r').read().splitlines() 
-    gt_dir          = os.path.join(VOCdevkit_path, "VOC2007/SegmentationClass/")
-    miou_out_path   = "miou_out"
-    pred_dir        = os.path.join(miou_out_path, 'detection-results')
-
-    if miou_mode == 0 or miou_mode == 1:
-        if not os.path.exists(pred_dir):
-            os.makedirs(pred_dir)
-            
-        print("Load model.")
-        deeplab = DeeplabV3()
-        print("Load model done.")
-
-        print("Get predict result.")
-        for image_id in tqdm(image_ids):
-            image_path  = os.path.join(VOCdevkit_path, "VOC2007/JPEGImages/"+image_id+".jpg")
-            image       = Image.open(image_path)
-            image       = deeplab.get_miou_png(image)
-            image.save(os.path.join(pred_dir, image_id + ".png"))
-        print("Get predict result done.")
-
-    if miou_mode == 0 or miou_mode == 2:
-        print("Get miou.")
-        hist, IoUs, PA_Recall, Precision = compute_mIoU(gt_dir, pred_dir, image_ids, num_classes, name_classes)  # 执行计算mIoU的函数
-        print("Get miou done.")
-        show_results(miou_out_path, hist, IoUs, PA_Recall, Precision, name_classes)
+    main()

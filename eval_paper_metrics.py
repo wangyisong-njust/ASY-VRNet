@@ -55,7 +55,7 @@ def parse_args():
     parser.add_argument("--val_txt", default="2007_val.txt")
     parser.add_argument("--model_path", default="logs/best_epoch_weights.pth")
     parser.add_argument("--classes_path", default="model_data/waterscenes.txt")
-    parser.add_argument("--radar_root", default=os.environ.get("ASY_RADAR_ROOT", "dataset/VOCradar"))
+    parser.add_argument("--radar_root", default=os.environ.get("ASY_RADAR_ROOT", "dataset/VOCradar_5_frames"))
     parser.add_argument("--vocdevkit_path", default=os.environ.get("ASY_VOCDEVKIT", "dataset/VOCdevkit"))
     parser.add_argument(
         "--info_csv",
@@ -78,8 +78,19 @@ def parse_args():
     parser.add_argument("--radar_target_order", default=os.environ.get("ASY_RADAR_TARGET_ORDER", "range,elevation,velocity,power"))
     parser.add_argument("--fusion_mode", default=os.environ.get("ASY_FUSION_MODE", "baseline"))
     parser.add_argument("--radar_dropout", type=float, default=float(os.environ.get("ASY_RADAR_DROPOUT", "0.0")))
-    parser.add_argument("--task_loss", default=os.environ.get("ASY_TASK_LOSS", "sum"))
+    parser.add_argument("--task_loss", default=os.environ.get("ASY_TASK_LOSS", "uncertainty"))
     parser.add_argument("--small_area", type=float, default=32 * 32)
+    parser.add_argument(
+        "--small_area_space",
+        choices=["original", "input"],
+        default=os.environ.get("ASY_SMALL_AREA_SPACE", "original"),
+        help="Use original-image pixels or resized input pixels when selecting the Table VI small-object subset.",
+    )
+    parser.add_argument(
+        "--dark_times",
+        default=os.environ.get("ASY_DARK_TIMES", "night,nightfall"),
+        help="Comma-separated WaterScenes time values treated as the dark subset.",
+    )
     parser.add_argument("--disable_subset_metrics", action="store_true")
     parser.add_argument("--cuda", action="store_true", default=True)
     parser.add_argument("--no_cuda", action="store_false", dest="cuda")
@@ -158,7 +169,7 @@ def coco_stats_to_metrics(coco_stats, prefix=""):
     return metrics
 
 
-def has_small_gt_object(annotation_line, input_shape, small_area):
+def has_small_gt_object(annotation_line, input_shape, small_area, area_space="original"):
     line = annotation_line.split()
     image_path = resolve_path(line[0])
     if len(line) <= 1:
@@ -171,15 +182,19 @@ def has_small_gt_object(annotation_line, input_shape, small_area):
     scale = min(input_w / image_w, input_h / image_h)
     for box in line[1:]:
         left, top, right, bottom, _ = map(int, box.split(","))
-        scaled_area = max(right - left, 0) * max(bottom - top, 0) * scale * scale
-        if scaled_area <= small_area:
+        area = max(right - left, 0) * max(bottom - top, 0)
+        if area_space == "input":
+            area *= scale * scale
+        if area <= small_area:
             return True
     return False
 
 
-def load_adverse_subsets(info_csv, image_ids, annotation_by_id, input_shape, small_area):
+def load_adverse_subsets(info_csv, image_ids, annotation_by_id, input_shape, small_area,
+                         dark_times=("night", "nightfall"), small_area_space="original"):
     image_id_set = set(image_ids)
     subsets = {"dark": set(), "dim": set(), "small": set()}
+    dark_times = {str(item).strip() for item in dark_times if str(item).strip()}
 
     if os.path.exists(info_csv):
         with open(info_csv, encoding="utf-8") as f:
@@ -187,7 +202,7 @@ def load_adverse_subsets(info_csv, image_ids, annotation_by_id, input_shape, sma
                 image_id = row.get("id", "")
                 if image_id not in image_id_set:
                     continue
-                if row.get("time") == "night":
+                if row.get("time") in dark_times:
                     subsets["dark"].add(image_id)
                 if row.get("lighting") == "dim":
                     subsets["dim"].add(image_id)
@@ -195,7 +210,7 @@ def load_adverse_subsets(info_csv, image_ids, annotation_by_id, input_shape, sma
         print(f"Warning: info csv not found, skip dark/dim subset metrics: {info_csv}")
 
     for image_id, annotation_line in annotation_by_id.items():
-        if has_small_gt_object(annotation_line, input_shape, small_area):
+        if has_small_gt_object(annotation_line, input_shape, small_area, area_space=small_area_space):
             subsets["small"].add(image_id)
 
     return {name: [image_id for image_id in image_ids if image_id in ids] for name, ids in subsets.items()}
@@ -341,6 +356,8 @@ def main():
             annotation_by_id,
             args.input_shape,
             args.small_area,
+            dark_times=args.dark_times.split(","),
+            small_area_space=args.small_area_space,
         )
         subset_metrics = compute_subset_metrics(
             class_names,

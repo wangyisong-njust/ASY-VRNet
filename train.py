@@ -3,7 +3,8 @@
 # -------------------------------------#
 import datetime
 import os
-os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+if "ASY_CUDA_LAUNCH_BLOCKING" in os.environ:
+    os.environ["CUDA_LAUNCH_BLOCKING"] = os.environ["ASY_CUDA_LAUNCH_BLOCKING"]
 from pathlib import Path
 
 import numpy as np
@@ -116,7 +117,7 @@ if __name__ == "__main__":
     # ------------------------------------------------------#
     #   input_shape     输入的shape大小，一定要是32的倍数
     # ------------------------------------------------------#
-    input_shape = env_shape("ASY_INPUT_SHAPE", [512, 512])
+    input_shape = env_shape("ASY_INPUT_SHAPE", [320, 320])
     # ------------------------------------------------------#
     #   所使用的YoloX的版本。nano、tiny、s、m、l
     # ------------------------------------------------------#
@@ -134,7 +135,7 @@ if __name__ == "__main__":
     radar_target_order = os.environ.get("ASY_RADAR_TARGET_ORDER", "range,elevation,velocity,power")
     fusion_mode = os.environ.get("ASY_FUSION_MODE", "baseline").lower()
     radar_dropout = env_float("ASY_RADAR_DROPOUT", 0.0)
-    task_loss_mode = os.environ.get("ASY_TASK_LOSS", "sum").lower()
+    task_loss_mode = os.environ.get("ASY_TASK_LOSS", "uncertainty").lower()
     if fusion_mode not in {"baseline", "reliability"}:
         raise ValueError(f"Unsupported ASY_FUSION_MODE={fusion_mode!r}")
     if task_loss_mode not in {"sum", "uncertainty"}:
@@ -270,7 +271,7 @@ if __name__ == "__main__":
     # ----------------------------------------------------#
     # 雷达feature map路径
     # ----------------------------------------------------#
-    radar_file_path = os.environ.get("ASY_RADAR_ROOT", str(PROJECT_ROOT / "dataset" / "VOCradar"))
+    radar_file_path = os.environ.get("ASY_RADAR_ROOT", str(PROJECT_ROOT / "dataset" / "VOCradar_5_frames"))
 
     # ----------------------------------------------------#
     #   获得目标检测图片路径和标签
@@ -372,11 +373,11 @@ if __name__ == "__main__":
     #   要求 phi='l'（width=1.0）与权重维度匹配
     # -----------------------------------------------------------------------#
     coc_pretrained_path = 'model_data/coc_small-bs128-lr0.001-wd0.05-dp0.0-distillnone-224/model_best.pth.tar'
-    if os.path.exists(coc_pretrained_path) and phi == 'l':
+    if model_path == '' and os.path.exists(coc_pretrained_path) and phi == 'l':
         if local_rank == 0 or local_rank == 1:
             print(f'Loading CoC pretrained weights from {coc_pretrained_path}')
         load_coc_pretrained(model, coc_pretrained_path)
-    elif phi != 'l':
+    elif model_path == '' and phi != 'l':
         if local_rank == 0 or local_rank == 1:
             print('[Warning] CoC 预训练权重仅在 phi=\'l\' 时适用，当前跳过。')
 
@@ -392,6 +393,8 @@ if __name__ == "__main__":
         # ------------------------------------------------------#
         model_dict = model.state_dict()
         pretrained_dict = torch.load(model_path, map_location=device)
+        if isinstance(pretrained_dict, dict):
+            pretrained_dict = pretrained_dict.get("state_dict", pretrained_dict.get("model", pretrained_dict))
         load_key, no_load_key, temp_dict = [], [], {}
         for k, v in pretrained_dict.items():
             if k in model_dict.keys() and np.shape(model_dict[k]) == np.shape(v):

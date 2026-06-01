@@ -116,21 +116,33 @@ def raw_channel_errors(csv_path: Path, radar_npz_path: Path, image_size: tuple[i
     if df.empty:
         return 0, 0.0, 0.0
 
-    df = df.sort_values("power", ascending=True).drop_duplicates(["x", "y"], keep="last")
-    x = df["x"].to_numpy(np.int32)
-    y = df["y"].to_numpy(np.int32)
-    expected = np.stack(
-        [
-            df["range"].to_numpy(np.float32),
-            df["elevation"].to_numpy(np.float32),
-            df["doppler"].to_numpy(np.float32),
-            df["power"].to_numpy(np.float32),
-        ],
-        axis=0,
-    )
-    observed = raw[:, y, x]
-    errors = np.abs(observed - expected)
-    return int(errors.shape[1]), float(np.mean(errors)), float(np.max(errors))
+    errors = []
+    for (_, _), group in df.groupby(["x", "y"], sort=False):
+        max_power = group["power"].max()
+        # Some multi-frame CSVs contain duplicate projected pixels with exactly
+        # the same power but slightly different velocity. The compressed NPZ
+        # can validly contain any tied max-power row, depending on conversion
+        # order, so audit against the best tied candidate instead of one row.
+        candidates = group[np.isclose(group["power"], max_power, rtol=0.0, atol=1e-6)]
+        expected = np.stack(
+            [
+                candidates["range"].to_numpy(np.float32),
+                candidates["elevation"].to_numpy(np.float32),
+                candidates["doppler"].to_numpy(np.float32),
+                candidates["power"].to_numpy(np.float32),
+            ],
+            axis=1,
+        )
+        x = int(group["x"].iloc[0])
+        y = int(group["y"].iloc[0])
+        observed = raw[:, y, x]
+        candidate_errors = np.abs(expected - observed[None, :])
+        errors.append(candidate_errors[np.argmin(candidate_errors.max(axis=1))])
+
+    if not errors:
+        return 0, 0.0, 0.0
+    errors = np.asarray(errors, dtype=np.float32)
+    return int(errors.shape[0]), float(np.mean(errors)), float(np.max(errors))
 
 
 @dataclass

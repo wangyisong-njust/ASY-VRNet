@@ -47,7 +47,7 @@ def main():
     parser.add_argument("--train_txt", default=os.environ.get("ASY_TRAIN_TXT", "2007_train.txt"))
     parser.add_argument("--val_txt", default=os.environ.get("ASY_VAL_TXT", "2007_val.txt"))
     parser.add_argument("--vocdevkit", default=os.environ.get("ASY_VOCDEVKIT", str(PROJECT_ROOT / "dataset" / "VOCdevkit")))
-    parser.add_argument("--radar_root", default=os.environ.get("ASY_RADAR_ROOT", str(PROJECT_ROOT / "dataset" / "VOCradar")))
+    parser.add_argument("--radar_root", default=os.environ.get("ASY_RADAR_ROOT", str(PROJECT_ROOT / "dataset" / "VOCradar_5_frames")))
     parser.add_argument("--limit", type=int, default=200)
     args = parser.parse_args()
 

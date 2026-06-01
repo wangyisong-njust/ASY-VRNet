@@ -29,6 +29,21 @@ def env_bool(name, default):
     return value.lower() in {"1", "true", "yes", "y", "on"}
 
 
+def env_float(name, default):
+    value = os.environ.get(name)
+    return default if value is None else float(value)
+
+
+def env_shape(name, default):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    parts = [int(part) for part in value.replace(",", " ").split()]
+    if len(parts) != 2:
+        raise ValueError(f"{name} must contain two integers, got {value!r}")
+    return parts
+
+
 class YOLO(object):
     _defaults = {
         # --------------------------------------------------------------------------#
@@ -39,13 +54,13 @@ class YOLO(object):
         #   验证集损失较低不代表mAP较高，仅代表该权值在验证集上泛化性能较好。
         #   如果出现shape不匹配，同时要注意训练时的model_path和classes_path参数的修改
         # --------------------------------------------------------------------------#
-        "model_path"        : 'logs/best_epoch_weights.pth',
-        "radar_root": str(PROJECT_ROOT / "dataset" / "VOCradar"),
-        "classes_path": 'model_data/waterscenes.txt',
+        "model_path": os.environ.get("ASY_MODEL_PATH", str(PROJECT_ROOT / "logs" / "best_epoch_weights.pth")),
+        "radar_root": os.environ.get("ASY_RADAR_ROOT", str(PROJECT_ROOT / "dataset" / "VOCradar_5_frames")),
+        "classes_path": os.environ.get("ASY_CLASSES_PATH", str(PROJECT_ROOT / "model_data" / "waterscenes.txt")),
         # ---------------------------------------------------------------------#
         #   输入图片的大小，必须为32的倍数。
         # ---------------------------------------------------------------------#
-        "input_shape": [512, 512],
+        "input_shape": env_shape("ASY_INPUT_SHAPE", [320, 320]),
         "num_seg_classes": 9,
         "radar_in_channels": int(os.environ.get("ASY_RADAR_CHANNELS", "4")),
         "radar_align_mode": os.environ.get("ASY_RADAR_ALIGN_MODE", "letterbox"),
@@ -55,29 +70,29 @@ class YOLO(object):
         "radar_target_order": os.environ.get("ASY_RADAR_TARGET_ORDER", "range,elevation,velocity,power"),
         "fusion_mode": os.environ.get("ASY_FUSION_MODE", "baseline"),
         "radar_dropout": float(os.environ.get("ASY_RADAR_DROPOUT", "0.0")),
-        "task_loss_mode": os.environ.get("ASY_TASK_LOSS", "sum"),
+        "task_loss_mode": os.environ.get("ASY_TASK_LOSS", "uncertainty"),
         # ---------------------------------------------------------------------#
         #   所使用的YoloX的版本。nano、tiny、s、m、l、x
         # ---------------------------------------------------------------------#
-        "phi": 'l',
+        "phi": os.environ.get("ASY_PHI", "l"),
         # ---------------------------------------------------------------------#
         #   只有得分大于置信度的预测框会被保留下来
         # ---------------------------------------------------------------------#
-        "confidence": 0.3,
+        "confidence": env_float("ASY_CONFIDENCE", 0.3),
         # ---------------------------------------------------------------------#
         #   非极大抑制所用到的nms_iou大小
         # ---------------------------------------------------------------------#
-        "nms_iou": 0.5,
+        "nms_iou": env_float("ASY_NMS_IOU", 0.5),
         # ---------------------------------------------------------------------#
         #   该变量用于控制是否使用letterbox_image对输入图像进行不失真的resize，
         #   在多次测试后，发现关闭letterbox_image直接resize的效果更好
         # ---------------------------------------------------------------------#
-        "letterbox_image": True,
+        "letterbox_image": env_bool("ASY_LETTERBOX_IMAGE", True),
         # -------------------------------#
         #   是否使用Cuda
         #   没有GPU可以设置成False
         # -------------------------------#
-        "cuda": True,
+        "cuda": env_bool("ASY_CUDA", True),
     }
 
     @classmethod
@@ -91,10 +106,12 @@ class YOLO(object):
     #   初始化YOLO
     # ---------------------------------------------------#
     def __init__(self, **kwargs):
-        self.__dict__.update(self._defaults)
+        config = dict(self._defaults)
+        config.update(kwargs)
+        self.__dict__.update(config)
         for name, value in kwargs.items():
             setattr(self, name, value)
-            self._defaults[name] = value
+        self._config = config
         self.radar_in_channels = int(self.radar_in_channels)
         self.radar_align_mode = str(self.radar_align_mode).lower()
         self.radar_normalize = bool(self.radar_normalize)
@@ -102,7 +119,7 @@ class YOLO(object):
         self.fusion_mode = str(self.fusion_mode).lower()
         self.task_loss_mode = str(self.task_loss_mode).lower()
 
-            # ---------------------------------------------------#
+        # ---------------------------------------------------#
         #   获得种类和先验框的数量
         # ---------------------------------------------------#
         self.class_names, self.num_classes = get_classes(self.classes_path)
@@ -115,7 +132,7 @@ class YOLO(object):
         self.colors = list(map(lambda x: (int(x[0] * 255), int(x[1] * 255), int(x[2] * 255)), self.colors))
         self.generate()
 
-        show_config(**self._defaults)
+        show_config(**self._config)
 
     # ---------------------------------------------------#
     #   生成模型
@@ -132,6 +149,8 @@ class YOLO(object):
         )
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         checkpoint = torch.load(self.model_path, map_location=device)
+        if isinstance(checkpoint, dict):
+            checkpoint = checkpoint.get("state_dict", checkpoint.get("model", checkpoint))
         model_dict = self.net.state_dict()
         compatible_dict = {
             k: v for k, v in checkpoint.items()

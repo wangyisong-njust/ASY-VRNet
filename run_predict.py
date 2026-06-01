@@ -1,49 +1,77 @@
-"""
-批量推理测试脚本：对验证集图片运行检测+分割推理，保存结果图片
-"""
+"""Batch detection visualization for validation image/radar pairs."""
+import argparse
 import os
 import sys
 from pathlib import Path
 sys.path.insert(0, '.')
 
-import numpy as np
 from PIL import Image
 from tqdm import tqdm
 
 from yolo import YOLO
-from deeplab import DeeplabV3
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-OUTPUT_DIR = PROJECT_ROOT / "predict_output"
-VAL_TXT    = PROJECT_ROOT / "2007_val.txt"
-RADAR_ROOT = os.environ.get("ASY_RADAR_ROOT", str(PROJECT_ROOT / "dataset" / "VOCradar"))
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# 读取验证集图片列表
-with open(VAL_TXT) as f:
-    val_lines = [l.strip().split()[0] for l in f.readlines() if l.strip()]
+def parse_shape(value):
+    parts = [int(part) for part in value.replace(",", " ").split()]
+    if len(parts) != 2:
+        raise argparse.ArgumentTypeError("--input_shape must contain two integers, for example 320,320")
+    return parts
 
-print(f"验证集共 {len(val_lines)} 张图片")
 
-# 加载检测模型
-det_model = YOLO()
+def parse_args():
+    parser = argparse.ArgumentParser(description="Save ASY-VRNet detection visualizations for a txt split.")
+    parser.add_argument("--val_txt", default=str(PROJECT_ROOT / "2007_val.txt"))
+    parser.add_argument("--output_dir", default=str(PROJECT_ROOT / "predict_output"))
+    parser.add_argument("--model_path", default=os.environ.get("ASY_MODEL_PATH", ""))
+    parser.add_argument("--classes_path", default=os.environ.get("ASY_CLASSES_PATH", ""))
+    parser.add_argument("--radar_root", default=os.environ.get("ASY_RADAR_ROOT", str(PROJECT_ROOT / "dataset" / "VOCradar_5_frames")))
+    parser.add_argument("--input_shape", type=parse_shape, default=None)
+    parser.add_argument("--phi", default=os.environ.get("ASY_PHI", ""))
+    parser.add_argument("--confidence", type=float, default=None)
+    parser.add_argument("--limit", type=int, default=0, help="0 means process the whole split.")
+    return parser.parse_args()
 
-success = 0
-for img_path in tqdm(val_lines, desc="Detection"):
-    try:
-        img_path = Path(img_path)
-        if not img_path.is_absolute():
-            img_path = PROJECT_ROOT / img_path
-        image = Image.open(img_path)
-        # 从路径提取文件名作为 image_id（需要匹配雷达文件）
-        stem = img_path.stem
-        r_image = det_model.detect_image(image, stem, crop=False, count=False)
-        save_path = OUTPUT_DIR / f"det_{stem}.jpg"
-        r_image.save(save_path)
-        success += 1
-    except Exception as e:
-        print(f"[WARN] {img_path}: {e}")
 
-print(f"检测完成：{success}/{len(val_lines)} 张已保存到 {OUTPUT_DIR}/")
-print("推理测试通过！")
+def resolve_path(path):
+    path = Path(path)
+    return path if path.is_absolute() else PROJECT_ROOT / path
+
+
+def main():
+    args = parse_args()
+    output_dir = resolve_path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    with open(resolve_path(args.val_txt), encoding="utf-8") as f:
+        val_lines = [line.strip().split()[0] for line in f if line.strip()]
+    if args.limit > 0:
+        val_lines = val_lines[:args.limit]
+
+    kwargs = {
+        "radar_root": args.radar_root,
+    }
+    for key in ["model_path", "classes_path", "input_shape", "phi", "confidence"]:
+        value = getattr(args, key)
+        if value not in (None, ""):
+            kwargs[key] = value
+    det_model = YOLO(**kwargs)
+
+    success = 0
+    for img_path in tqdm(val_lines, desc="Detection"):
+        try:
+            img_path = resolve_path(img_path)
+            image = Image.open(img_path)
+            stem = img_path.stem
+            r_image = det_model.detect_image(image, stem, crop=False, count=False)
+            r_image.save(output_dir / f"det_{stem}.jpg")
+            success += 1
+        except Exception as exc:
+            print(f"[WARN] {img_path}: {exc}")
+
+    print(f"Saved detection visualizations: {success}/{len(val_lines)} -> {output_dir}")
+
+
+if __name__ == "__main__":
+    main()

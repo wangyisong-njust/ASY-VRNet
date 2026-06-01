@@ -1,0 +1,292 @@
+{
+  "timestamp": "2026-06-01T09:06:59",
+  "input_shape": [
+    320,
+    320
+  ],
+  "train_size": 37884,
+  "val_size": 10824,
+  "classes": {
+    "classes": [
+      "pier",
+      "buoy",
+      "sailor",
+      "ship",
+      "boat",
+      "vessel",
+      "kayak"
+    ],
+    "num_classes": 7,
+    "matches_waterscenes": true
+  },
+  "train_annotations": {
+    "checked_images": 128,
+    "total_boxes": 468,
+    "empty_images": 0,
+    "class_counts": {
+      "pier": 297,
+      "buoy": 15,
+      "sailor": 16,
+      "ship": 85,
+      "boat": 33,
+      "vessel": 22,
+      "kayak": 0
+    },
+    "out_of_bounds": 0,
+    "transformed_out_of_bounds": 0,
+    "xml_mismatch": 0,
+    "yolo_mismatch": 0
+  },
+  "val_annotations": {
+    "checked_images": 128,
+    "total_boxes": 519,
+    "empty_images": 0,
+    "class_counts": {
+      "pier": 339,
+      "buoy": 39,
+      "sailor": 12,
+      "ship": 74,
+      "boat": 22,
+      "vessel": 32,
+      "kayak": 1
+    },
+    "out_of_bounds": 0,
+    "transformed_out_of_bounds": 0,
+    "xml_mismatch": 0,
+    "yolo_mismatch": 0
+  },
+  "radar": {
+    "checked": 128,
+    "missing": 0,
+    "zero_after_load": 0,
+    "dense_background_after_normalize": 0,
+    "sample_stats": [
+      {
+        "id": "36165",
+        "raw_shape": [
+          4,
+          512,
+          512
+        ],
+        "raw_nonzero": 135,
+        "letterbox_nonzero": 128,
+        "direct_nonzero": 128,
+        "raw_support_xyxy": [
+          34,
+          181,
+          221,
+          421
+        ],
+        "letterbox_support_xyxy": [
+          21,
+          133,
+          138,
+          218
+        ],
+        "direct_support_xyxy": [
+          21,
+          113,
+          138,
+          263
+        ],
+        "raw_min": -6.202000141143799,
+        "raw_max": 88.33450317382812,
+        "loaded_channel_means": [
+          71.61811065673828,
+          -1.911414384841919,
+          -2.069723129272461,
+          11.78823471069336
+        ]
+      },
+      {
+        "id": "12050",
+        "raw_shape": [
+          4,
+          512,
+          512
+        ],
+        "raw_nonzero": 1970,
+        "letterbox_nonzero": 1778,
+        "direct_nonzero": 1890,
+        "raw_support_xyxy": [
+          0,
+          110,
+          424,
+          365
+        ],
+        "letterbox_support_xyxy": [
+          0,
+          108,
+          265,
+          198
+        ],
+        "direct_support_xyxy": [
+          0,
+          68,
+          265,
+          228
+        ],
+        "raw_min": -14.087400436401367,
+        "raw_max": 142.19700622558594,
+        "loaded_channel_means": [
+          47.171443939208984,
+          -1.8158999681472778,
+          -0.3035163879394531,
+          13.0558443069458
+        ]
+      },
+      {
+        "id": "40770",
+        "raw_shape": [
+          4,
+          512,
+          512
+        ],
+        "raw_nonzero": 1209,
+        "letterbox_nonzero": 1067,
+        "direct_nonzero": 1137,
+        "raw_support_xyxy": [
+          71,
+          128,
+          368,
+          378
+        ],
+        "letterbox_support_xyxy": [
+          44,
+          115,
+          230,
+          202
+        ],
+        "direct_support_xyxy": [
+          44,
+          80,
+          230,
+          236
+        ],
+        "raw_min": -11.961000442504883,
+        "raw_max": 171.92950439453125,
+        "loaded_channel_means": [
+          64.2041015625,
+          -0.4648243486881256,
+          -1.060821533203125,
+          14.283915519714355
+        ]
+      },
+      {
+        "id": "32258",
+        "raw_shape": [
+          4,
+          512,
+          512
+        ],
+        "raw_nonzero": 1404,
+        "letterbox_nonzero": 1144,
+        "direct_nonzero": 1268,
+        "raw_support_xyxy": [
+          6,
+          197,
+          454,
+          443
+        ],
+        "letterbox_support_xyxy": [
+          3,
+          139,
+          283,
+          225
+        ],
+        "direct_support_xyxy": [
+          3,
+          123,
+          283,
+          276
+        ],
+        "raw_min": -4.828700065612793,
+        "raw_max": 186.1490020751953,
+        "loaded_channel_means": [
+          37.827293395996094,
+          4.844344139099121,
+          -1.5644015073776245,
+          14.171608924865723
+        ]
+      },
+      {
+        "id": "33076",
+        "raw_shape": [
+          4,
+          512,
+          512
+        ],
+        "raw_nonzero": 598,
+        "letterbox_nonzero": 495,
+        "direct_nonzero": 574,
+        "raw_support_xyxy": [
+          62,
+          205,
+          349,
+          354
+        ],
+        "letterbox_support_xyxy": [
+          38,
+          142,
+          218,
+          194
+        ],
+        "direct_support_xyxy": [
+          38,
+          128,
+          218,
+          221
+        ],
+        "raw_min": -4.119900226593018,
+        "raw_max": 177.5308074951172,
+        "loaded_channel_means": [
+          86.9206771850586,
+          -2.0182723999023438,
+          0.007199999410659075,
+          13.593202590942383
+        ]
+      }
+    ],
+    "source_order": "range,doppler,elevation,power",
+    "target_order": "range,elevation,velocity,power",
+    "interpretation": "The current NPZ maps are generated by scaling u to width and v to height in a square map. Applying image letterbox at load time maps them back to the 320x320 image letterbox geometry. Legacy NPZ files are interpreted as range,doppler,elevation,power and remapped to paper REVP order range,elevation,velocity,power during loading."
+  },
+  "decode": {
+    "head_shapes": [
+      [
+        1,
+        12,
+        40,
+        40
+      ],
+      [
+        1,
+        12,
+        20,
+        20
+      ],
+      [
+        1,
+        12,
+        10,
+        10
+      ]
+    ],
+    "inferred_strides": [
+      [
+        8.0,
+        8.0
+      ],
+      [
+        16.0,
+        16.0
+      ],
+      [
+        32.0,
+        32.0
+      ]
+    ],
+    "synthetic_nms_count": 3
+  },
+  "issues": []
+}
