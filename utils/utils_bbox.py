@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from torchvision.ops import nms, boxes
+from torchvision.ops import boxes
 
 def yolo_correct_boxes(box_xy, box_wh, input_shape, image_shape, letterbox_image):
     #-----------------------------------------------------------------#
@@ -8,15 +8,20 @@ def yolo_correct_boxes(box_xy, box_wh, input_shape, image_shape, letterbox_image
     #-----------------------------------------------------------------#
     box_yx = box_xy[..., ::-1]
     box_hw = box_wh[..., ::-1]
-    input_shape = np.array(input_shape)
-    image_shape = np.array(image_shape)
+    input_shape = np.array(input_shape, dtype=np.float32)
+    image_shape = np.array(image_shape, dtype=np.float32)
 
     if letterbox_image:
         #-----------------------------------------------------------------#
         #   这里求出来的offset是图像有效区域相对于图像左上角的偏移情况
         #   new_shape指的是宽高缩放情况
         #-----------------------------------------------------------------#
-        new_shape = np.round(image_shape * np.min(input_shape/image_shape))
+        scale_ratio = min(input_shape[1] / image_shape[1], input_shape[0] / image_shape[0])
+        new_shape = np.array(
+            [int(image_shape[0] * scale_ratio), int(image_shape[1] * scale_ratio)],
+            dtype=np.float32,
+        )
+        new_shape = np.maximum(new_shape, 1.0)
         offset  = (input_shape - new_shape)/2./input_shape
         scale   = input_shape/new_shape
 
@@ -64,7 +69,12 @@ def decode_outputs(outputs, input_shape, local_rank=0):
         shape           = grid.shape[:2]
 
         grids.append(grid)
-        strides.append(torch.full((shape[0], shape[1], 1), input_shape[0] / h, device=outputs.device))
+        stride = torch.tensor(
+            [input_shape[1] / w, input_shape[0] / h],
+            device=outputs.device,
+            dtype=outputs.dtype,
+        ).view(1, 1, 2).expand(shape[0], shape[1], 2)
+        strides.append(stride)
     #---------------------------#
     #   将网格点堆叠到一起
     #   1, 6400, 2
@@ -124,6 +134,8 @@ def non_max_suppression(prediction, num_classes, input_shape, image_shape, lette
         #-------------------------------------------------------------------------#
         detections = torch.cat((image_pred[:, :5], class_conf, class_pred.float()), 1)
         detections = detections[conf_mask]
+        if detections.size(0) == 0:
+            continue
         
         nms_out_index = boxes.batched_nms(
             detections[:, :4],

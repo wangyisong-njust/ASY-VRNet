@@ -45,15 +45,18 @@ def fast_hist(a, b, n):
 
 
 def per_class_iu(hist):
-    return np.diag(hist) / np.maximum((hist.sum(1) + hist.sum(0) - np.diag(hist)), 1)
+    denom = hist.sum(1) + hist.sum(0) - np.diag(hist)
+    return np.divide(np.diag(hist), denom, out=np.full_like(denom, np.nan, dtype=np.float64), where=denom != 0)
 
 
 def per_class_PA_Recall(hist):
-    return np.diag(hist) / np.maximum(hist.sum(1), 1)
+    denom = hist.sum(1)
+    return np.divide(np.diag(hist), denom, out=np.full_like(denom, np.nan, dtype=np.float64), where=denom != 0)
 
 
 def per_class_Precision(hist):
-    return np.diag(hist) / np.maximum(hist.sum(0), 1)
+    denom = hist.sum(0)
+    return np.divide(np.diag(hist), denom, out=np.full_like(denom, np.nan, dtype=np.float64), where=denom != 0)
 
 
 def per_Accuracy(hist):

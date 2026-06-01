@@ -148,7 +148,7 @@ class YoloDataset(Dataset):
         # ------------------------------#
         #   获得预测框
         # ------------------------------#
-        box = np.array([np.array(list(map(int, box.split(',')))) for box in line[1:]])
+        box = np.array([np.array(list(map(float, box.split(',')))) for box in line[1:]], dtype=np.float32)
 
         scale = min(w / iw, h / ih)
         nw = int(iw * scale)
@@ -340,7 +340,7 @@ class YoloDataset(Dataset):
             # ---------------------------------#
             #   保存框的位置
             # ---------------------------------#
-            box = np.array([np.array(list(map(int, box.split(',')))) for box in line_content[1:]])
+            box = np.array([np.array(list(map(float, box.split(',')))) for box in line_content[1:]], dtype=np.float32)
 
             # ---------------------------------#
             #   是否翻转图片

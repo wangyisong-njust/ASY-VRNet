@@ -509,9 +509,17 @@ class YOLO(object):
             top, left, bottom, right = box
             if predicted_class not in class_names:
                 continue
+            top = max(0.0, min(float(top), float(image.size[1])))
+            left = max(0.0, min(float(left), float(image.size[0])))
+            bottom = max(0.0, min(float(bottom), float(image.size[1])))
+            right = max(0.0, min(float(right), float(image.size[0])))
+            if right <= left or bottom <= top:
+                continue
 
-            f.write("%s %.8f %s %s %s %s\n" % (
-            predicted_class, score, str(int(left)), str(int(top)), str(int(right)), str(int(bottom))))
+            f.write(
+                f"{predicted_class} {score:.8f} "
+                f"{left:.2f} {top:.2f} {right:.2f} {bottom:.2f}\n"
+            )
 
         f.close()
         return

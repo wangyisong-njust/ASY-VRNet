@@ -63,6 +63,7 @@ mkdir -p "${ASY_SAVE_DIR}" "${ASY_SAVE_DIR_SEG}"
 "${PYTHON}" scripts/check_dataset.py
 "${PYTHON}" scripts/audit_detection_pipeline.py --sample_limit 256 --skip_model
 "${PYTHON}" scripts/audit_preprocessing_alignment.py --samples 64 --visuals 8
+"${PYTHON}" scripts/audit_end_to_end_pipeline.py --samples 16
 
 stamp=$(date +%Y%m%d_%H%M%S)
 "${PYTHON}" -m torch.distributed.run --master_port="${MASTER_PORT}" --nproc_per_node=4 train.py 2>&1 | tee "${ASY_SAVE_DIR}/train_${stamp}.log"

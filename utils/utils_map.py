@@ -862,7 +862,9 @@ def preprocess_gt(gt_path, class_names):
         annotation['image_id']    = box[-3]
         annotation['iscrowd']     = box[-4]
         annotation['bbox']        = box[:4]
-        annotation['id']          = i
+        # pycocotools expects positive annotation ids; id=0 can be skipped in
+        # matching, which makes a perfect identity prediction score below 1.0.
+        annotation['id']          = i + 1
         annotations.append(annotation)
     results['annotations'] = annotations
     return results
