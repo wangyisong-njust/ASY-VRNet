@@ -1,12 +1,10 @@
 # ASY-VRNet 复现与实验命令
 
-更新日期：2026-06-12
-
 本文只保留复现实验需要的配置、路径和命令。方法解释、实验结论和论文叙事见 `docs/report.md`。
 
 ## 仓库不包含的大文件（需自行准备）
 
-为保持仓库精简，以下大文件不随代码提供，请按说明准备：
+以下数据集不随代码提供，请按说明准备：
 
 | 内容 | 获取方式 | 放置位置 |
 | --- | --- | --- |
@@ -14,8 +12,6 @@
 | ContextCluster 预训练骨干 `model_best.pth.tar` | 公开预训练权重，按 ContextCluster 官方发布下载 | `model_data/coc_small-bs128-lr0.001-wd0.05-dp0.0-distillnone-224/` |
 | 最终单次前向模型 `final_greedy_soup.pth`（194MB） | 从 [GitHub Release 下载](https://github.com/wangyisong-njust/ASY-VRNet/releases/download/v1.0-final-model/final_greedy_soup.pth)，或用 `scripts/greedy_soup.py` 从创新点一与多尺度微调权重再生成（命令见“§3 生成单次前向最优模型汤”） | `weights/final_greedy_soup.pth` |
 | 训练中间检查点（创新点一 / 多尺度微调的 epoch 权重） | 不随仓库提供，按下文命令自行训练 | 各 `logs_*/` 目录 |
-
-> 注：最终模型与中间检查点均不随仓库提供，按上表自行训练 / 再生成。仓库只保留最终代码、文档与紧凑的指标摘要（`results/*/paper_metrics.json|csv`）。
 
 ## 固定评估口径
 
@@ -280,11 +276,3 @@ python3 scripts/plot_radar_robustness_curve.py \
   --out_root results/robustness
 ```
 
-## 6. 判定标准
-
-| 指标 | 判定 |
-| --- | --- |
-| 主指标 | `mAP50-95` 高于基线 `42.570`，且相对上一个主线方法继续提升 |
-| 子集指标 | `mAP_da`、`mAP_di`、`mAP_sm` 至少一个明显提升，其他不应大幅退化 |
-| 定位质量 | `AP75` 提升优先级高，说明不是只提高低阈值召回 |
-| 分割副指标 | `mIoU_o`、`mIoU_d` 不应明显下降 |
