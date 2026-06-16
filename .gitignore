@@ -1,38 +1,46 @@
+# ---- Python / IDE / env ----
 __pycache__/
 *.py[cod]
 *$py.class
-
 .idea/
 .vscode/
 venv/
 .venv/
 env/
 
+# ---- runtime scratch ----
 .temp_map_out/
 .temp_miou_out/
 paper_metrics_out/
 img_crop/
 img_out/
+*.log
+logs/*.pid
+logs/*.out
+logs/*.lock
+logs/*.latest
 
+# ---- datasets & downloads (publicly available, fetch separately) ----
 dataset/
 downloads/
 
-# Local training/evaluation runtime outputs.
-*.log
-logs_paper_baseline_*/
-logs_seg_paper_baseline_*/
-logs_paper_repro_*/
-logs_seg_paper_repro_*/
-logs_innovation_*/
-logs_seg_innovation_*/
-logs/loss_*/
-logs_seg/loss_*/
-logs/ep*-loss*.pth
+# ---- pretrained backbone (publicly downloadable, see docs/reproduction.md) ----
+model_data/**/*.pth.tar
 
-# Keep final paper metric summaries, but ignore bulky per-sample outputs.
-paper_metrics_best/*
-!paper_metrics_best/paper_metrics.json
-!paper_metrics_best/paper_metrics.csv
+# ---- model weights (not shipped; regenerate via scripts/greedy_soup.py) ----
+*.pth
+
+# ---- intermediate training / evaluation outputs (not shipped) ----
+logs/
+logs_seg/
+logs_*/
+logs_seg_*/
+reproduction_reports/
+results_archives/
+predict_output/
+predict_output_seg/
+
+# ---- keep only the compact final metric summaries under paper_metrics_*/ ----
 paper_metrics_*/*
 !paper_metrics_*/paper_metrics.json
 !paper_metrics_*/paper_metrics.csv

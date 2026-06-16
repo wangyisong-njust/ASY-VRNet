@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """Comprehensive ASY-VRNet reproduction audit.
 
 The script checks dataset splits, labels, masks, radar maps, high-risk script
@@ -377,7 +378,7 @@ def audit_high_risk_defaults(issues: list[Issue]) -> dict:
     checks = {
         "yolo.py": ["VOCradar_5_frames", "[320, 320]", "uncertainty"],
         "train.py": ["VOCradar_5_frames", "[320, 320]", "uncertainty"],
-        "eval_paper_metrics.py": ["VOCradar_5_frames", "small_area_space", "nightfall", "uncertainty"],
+        "eval_paper_metrics.py": ["VOCradar_5_frames", "small_area_space", "dim_weathers", "uncertainty"],
         "scripts/check_dataset.py": ["VOCradar_5_frames"],
         "run_predict.py": ["VOCradar_5_frames"],
         "prepare_dataset.py": ["VOCradar_5_frames", "radar_5_frames"],
@@ -468,6 +469,9 @@ def audit_metrics_subsets(args: argparse.Namespace, val_lines: list[str], issues
         args.small_area,
         dark_times=dark_times,
         small_area_space=args.small_area_space,
+        dim_lightings=args.dim_lightings.split(","),
+        dim_times=args.dim_times.split(","),
+        dim_weathers=args.dim_weathers.split(","),
     )
     counts = {name: len(ids) for name, ids in subsets.items()}
 
@@ -481,8 +485,8 @@ def audit_metrics_subsets(args: argparse.Namespace, val_lines: list[str], issues
                     continue
                 night_only += int(row.get("time") == "night")
                 nightfall += int(row.get("time") == "nightfall")
-    if "nightfall" in dark_times and counts["dark"] <= night_only and nightfall:
-        add_issue(issues, "error", "metric_subsets", "Dark subset did not include nightfall samples")
+    if "night" in dark_times and counts["dark"] < night_only:
+        add_issue(issues, "error", "metric_subsets", "Dark subset did not include all night samples")
 
     old_scaled_small = load_adverse_subsets(
         str(info_csv),
@@ -492,9 +496,15 @@ def audit_metrics_subsets(args: argparse.Namespace, val_lines: list[str], issues
         args.small_area,
         dark_times=dark_times,
         small_area_space="input",
+        dim_lightings=args.dim_lightings.split(","),
+        dim_times=args.dim_times.split(","),
+        dim_weathers=args.dim_weathers.split(","),
     )
     return {
         "dark_times": dark_times,
+        "dim_lightings": args.dim_lightings,
+        "dim_times": args.dim_times,
+        "dim_weathers": args.dim_weathers,
         "small_area": args.small_area,
         "small_area_space": args.small_area_space,
         "counts": counts,
@@ -577,9 +587,12 @@ def parse_args():
     parser.add_argument("--mask_samples", type=int, default=1024)
     parser.add_argument("--e2e_samples", type=int, default=32)
     parser.add_argument("--channel_tol", type=float, default=1e-4)
-    parser.add_argument("--small_area", type=float, default=32 * 32)
+    parser.add_argument("--small_area", type=float, default=float(os.environ.get("ASY_SMALL_AREA", 64 * 64)))
     parser.add_argument("--small_area_space", choices=["original", "input"], default=os.environ.get("ASY_SMALL_AREA_SPACE", "original"))
-    parser.add_argument("--dark_times", default=os.environ.get("ASY_DARK_TIMES", "night,nightfall"))
+    parser.add_argument("--dark_times", default=os.environ.get("ASY_DARK_TIMES", "night"))
+    parser.add_argument("--dim_lightings", default=os.environ.get("ASY_DIM_LIGHTINGS", "dim"))
+    parser.add_argument("--dim_times", default=os.environ.get("ASY_DIM_TIMES", "daytime,night"))
+    parser.add_argument("--dim_weathers", default=os.environ.get("ASY_DIM_WEATHERS", "overcast,rainy"))
     parser.add_argument("--out_dir", default=str(PROJECT_ROOT / "reproduction_reports"))
     return parser.parse_args()
 

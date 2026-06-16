@@ -34,10 +34,18 @@ RADAR_NORMALIZE=${RADAR_NORMALIZE:-${ASY_RADAR_NORMALIZE:-0}}
 RADAR_PRESERVE_POINTS=${RADAR_PRESERVE_POINTS:-${ASY_RADAR_PRESERVE_POINTS:-1}}
 RADAR_SOURCE_ORDER=${RADAR_SOURCE_ORDER:-${ASY_RADAR_SOURCE_ORDER:-range,doppler,elevation,power}}
 RADAR_TARGET_ORDER=${RADAR_TARGET_ORDER:-${ASY_RADAR_TARGET_ORDER:-range,elevation,velocity,power}}
+RADAR_LEGACY_PREPROCESS=${RADAR_LEGACY_PREPROCESS:-${ASY_RADAR_LEGACY_PREPROCESS:-0}}
 FUSION_MODE=${FUSION_MODE:-baseline}
 TASK_LOSS=${TASK_LOSS:-uncertainty}
-CONFIDENCE=${CONFIDENCE:-0.05}
+CONFIDENCE=${CONFIDENCE:-0.001}
+MAX_BOXES=${MAX_BOXES:-100}
 NMS_IOU=${NMS_IOU:-0.5}
+DARK_TIMES=${DARK_TIMES:-${ASY_DARK_TIMES:-night}}
+DIM_LIGHTINGS=${DIM_LIGHTINGS:-${ASY_DIM_LIGHTINGS:-dim}}
+DIM_TIMES=${DIM_TIMES:-${ASY_DIM_TIMES:-daytime,night}}
+DIM_WEATHERS=${DIM_WEATHERS:-${ASY_DIM_WEATHERS:-overcast,rainy}}
+SMALL_AREA=${SMALL_AREA:-${ASY_SMALL_AREA:-4096}}
+SMALL_AREA_SPACE=${SMALL_AREA_SPACE:-${ASY_SMALL_AREA_SPACE:-original}}
 CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 
 export PYTHONNOUSERSITE=${PYTHONNOUSERSITE:-1}
@@ -51,9 +59,16 @@ export ASY_RADAR_NORMALIZE="${RADAR_NORMALIZE}"
 export ASY_RADAR_PRESERVE_POINTS="${RADAR_PRESERVE_POINTS}"
 export ASY_RADAR_SOURCE_ORDER="${RADAR_SOURCE_ORDER}"
 export ASY_RADAR_TARGET_ORDER="${RADAR_TARGET_ORDER}"
+export ASY_RADAR_LEGACY_PREPROCESS="${RADAR_LEGACY_PREPROCESS}"
 export ASY_FUSION_MODE="${FUSION_MODE}"
 export ASY_RADAR_DROPOUT=${ASY_RADAR_DROPOUT:-0}
 export ASY_TASK_LOSS="${TASK_LOSS}"
+export ASY_DARK_TIMES="${DARK_TIMES}"
+export ASY_DIM_LIGHTINGS="${DIM_LIGHTINGS}"
+export ASY_DIM_TIMES="${DIM_TIMES}"
+export ASY_DIM_WEATHERS="${DIM_WEATHERS}"
+export ASY_SMALL_AREA="${SMALL_AREA}"
+export ASY_SMALL_AREA_SPACE="${SMALL_AREA_SPACE}"
 
 STAMP=$(date +%Y%m%d_%H%M%S)
 LOG_DIR=${LOG_DIR:-logs}
@@ -87,6 +102,10 @@ run_eval() {
     if [[ "${RADAR_PRESERVE_POINTS}" =~ ^(0|false|FALSE|no|NO|off|OFF)$ ]]; then
         radar_preserve_points_arg=--no_radar_preserve_points
     fi
+    local radar_legacy_preprocess_arg=--no_radar_legacy_preprocess
+    if [[ "${RADAR_LEGACY_PREPROCESS}" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]]; then
+        radar_legacy_preprocess_arg=--radar_legacy_preprocess
+    fi
 
     if [[ ! -f "${weight}" ]]; then
         log "Missing checkpoint: ${weight}"
@@ -111,10 +130,18 @@ run_eval() {
         --radar_target_order "${RADAR_TARGET_ORDER}" \
         "${radar_normalize_arg}" \
         "${radar_preserve_points_arg}" \
+        "${radar_legacy_preprocess_arg}" \
         --fusion_mode "${FUSION_MODE}" \
         --task_loss "${TASK_LOSS}" \
         --confidence "${CONFIDENCE}" \
+        --max_boxes "${MAX_BOXES}" \
         --nms_iou "${NMS_IOU}" \
+        --dark_times "${DARK_TIMES}" \
+        --dim_lightings "${DIM_LIGHTINGS}" \
+        --dim_times "${DIM_TIMES}" \
+        --dim_weathers "${DIM_WEATHERS}" \
+        --small_area "${SMALL_AREA}" \
+        --small_area_space "${SMALL_AREA_SPACE}" \
         --cuda
     log "Finished ${name} evaluation."
 }

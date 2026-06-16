@@ -11,11 +11,24 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+def env_float(name, default):
+    value = os.environ.get(name)
+    return default if value is None else float(value)
+
+
+def env_flag(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 class IOUloss(nn.Module):
     def __init__(self, reduction="none", loss_type="iou"):
         super(IOUloss, self).__init__()
         self.reduction = reduction
-        self.loss_type = loss_type
+        # env override: ASY_IOU_LOSS_TYPE = iou | giou | diou | ciou
+        self.loss_type = os.environ.get("ASY_IOU_LOSS_TYPE", loss_type)
 
     def forward(self, pred, target):
         assert pred.shape[0] == target.shape[0]
@@ -49,6 +62,28 @@ class IOUloss(nn.Module):
             area_c = torch.prod(c_br - c_tl, 1)
             giou = iou - (area_c - area_u) / area_c.clamp(1e-16)
             loss = 1 - giou.clamp(min=-1.0, max=1.0)
+        elif self.loss_type in ("diou", "ciou"):
+            # enclosing box corners (same as giou)
+            c_tl = torch.min(
+                (pred[:, :2] - pred[:, 2:] / 2), (target[:, :2] - target[:, 2:] / 2)
+            )
+            c_br = torch.max(
+                (pred[:, :2] + pred[:, 2:] / 2), (target[:, :2] + target[:, 2:] / 2)
+            )
+            # c² = diagonal of enclosing box squared
+            c2 = torch.sum((c_br - c_tl) ** 2, dim=1).clamp(1e-16)
+            # ρ² = center distance squared
+            rho2 = torch.sum((pred[:, :2] - target[:, :2]) ** 2, dim=1)
+            diou = iou - rho2 / c2
+            if self.loss_type == "diou":
+                loss = 1 - diou.clamp(min=-1.0, max=1.0)
+            else:  # ciou: add aspect-ratio consistency term
+                w_p, h_p = pred[:, 2].clamp(1e-16), pred[:, 3].clamp(1e-16)
+                w_g, h_g = target[:, 2].clamp(1e-16), target[:, 3].clamp(1e-16)
+                v = (4 / (math.pi ** 2)) * (torch.atan(w_g / h_g) - torch.atan(w_p / h_p)) ** 2
+                with torch.no_grad():
+                    alpha = v / (1 - iou + v + 1e-16)
+                loss = 1 - (diou - alpha * v).clamp(min=-1.0, max=1.0)
 
         if self.reduction == "mean":
             loss = loss.mean()
@@ -59,10 +94,14 @@ class IOUloss(nn.Module):
 
 
 class YOLOLoss(nn.Module):
-    def __init__(self, num_classes, fp16, strides=[8, 16, 32]):
+    def __init__(self, num_classes, fp16, strides=[8, 16, 32],
+                 box_weight=None, obj_weight=None, cls_weight=None):
         super().__init__()
         self.num_classes = num_classes
         self.strides = strides
+        self.box_weight = env_float("ASY_YOLO_BOX_WEIGHT", 1.0) if box_weight is None else float(box_weight)
+        self.obj_weight = env_float("ASY_YOLO_OBJ_WEIGHT", 2.0) if obj_weight is None else float(obj_weight)
+        self.cls_weight = env_float("ASY_YOLO_CLS_WEIGHT", 2.0) if cls_weight is None else float(cls_weight)
 
         self.bcewithlog_loss = nn.BCEWithLogitsLoss(reduction="none")
         self.iou_loss = IOUloss(reduction="none")
@@ -71,7 +110,23 @@ class YOLOLoss(nn.Module):
 
         self.log_vars = nn.Parameter(torch.zeros(3))
 
-    def forward(self, inputs, labels=None, return_components=False):
+        # ---- Innovation 2: radar-prior quality-aligned detection head ----
+        # Quality Focal Loss on objectness: replace the hard 0/1 objectness
+        # target with the IoU localization quality of the matched anchor, and
+        # add a focal modulation so the ranking score (obj*cls used by NMS) is
+        # aligned with localization quality. Improves AP75 / small objects.
+        self.use_qfl = env_flag("ASY_QFL", False)
+        self.qfl_beta = env_float("ASY_QFL_BETA", 2.0)
+        # Radar-prior reweighting: 4D radar returns are a spatial saliency prior
+        # for "where an object may exist". We up-weight the objectness loss at
+        # anchors that have radar returns so supervision focuses where radar
+        # fires (confirming true small/low-SNR targets and rejecting clutter).
+        # The targets themselves are unchanged, so this only redistributes
+        # gradient and cannot bias the head toward false positives.
+        self.use_radar_prior = env_flag("ASY_RADAR_PRIOR", False)
+        self.radar_prior_weight = env_float("ASY_RADAR_PRIOR_WEIGHT", 0.5)
+
+    def forward(self, inputs, labels=None, radars=None, return_components=False):
         outputs = []
         x_shifts = []
         y_shifts = []
@@ -95,14 +150,34 @@ class YOLOLoss(nn.Module):
             expanded_strides.append(torch.ones_like(grid[:, :, 0]) * stride)
             outputs.append(output)
 
+        radar_occupancy = None
+        if self.use_radar_prior and radars is not None:
+            radar_occupancy = self._build_radar_occupancy(radars, inputs)
+
         return self.get_losses(
             x_shifts,
             y_shifts,
             expanded_strides,
             labels,
             torch.cat(outputs, 1),
+            radar_occupancy=radar_occupancy,
             return_components=return_components,
         )
+
+    def _build_radar_occupancy(self, radars, inputs):
+        # -----------------------------------------------------------------#
+        #   radars  [batch, C, H, W] -> per-anchor radar presence in [0, 1]
+        #   For each FPN scale we max-pool a "radar present" mask down to the
+        #   feature-map grid, then flatten and concatenate across scales so the
+        #   layout matches ``torch.cat(outputs, 1)`` -> [batch, n_anchors_all, 1].
+        # -----------------------------------------------------------------#
+        radar_mask = (radars.abs().sum(dim=1, keepdim=True) > 0).type_as(inputs[0])
+        occ_list = []
+        for output in inputs:
+            hsize, wsize = output.shape[-2:]
+            pooled = F.adaptive_max_pool2d(radar_mask, (hsize, wsize))
+            occ_list.append(pooled.flatten(start_dim=2).permute(0, 2, 1))
+        return torch.cat(occ_list, 1)
 
     def get_output_and_grid(self, output, k, stride):
         grid = self.grids[k]
@@ -122,7 +197,7 @@ class YOLOLoss(nn.Module):
         output[..., 2:4] = torch.exp(output[..., 2:4]) * stride
         return output, grid
 
-    def get_losses(self, x_shifts, y_shifts, expanded_strides, labels, outputs, return_components=False):
+    def get_losses(self, x_shifts, y_shifts, expanded_strides, labels, outputs, radar_occupancy=None, return_components=False):
         # -----------------------------------------------#
         #   [batch, n_anchors_all, 4]
         # -----------------------------------------------#
@@ -187,7 +262,13 @@ class YOLOLoss(nn.Module):
                 num_fg += num_fg_img
                 cls_target = F.one_hot(gt_matched_classes.to(torch.int64),
                                        self.num_classes).float() * pred_ious_this_matching.unsqueeze(-1)
-                obj_target = fg_mask.unsqueeze(-1)
+                if self.use_qfl:
+                    # Quality-aligned objectness: positive anchors target their
+                    # IoU localization quality instead of a hard 1.
+                    obj_target = outputs.new_zeros((total_num_anchors, 1))
+                    obj_target[fg_mask] = pred_ious_this_matching.unsqueeze(-1).type_as(obj_target)
+                else:
+                    obj_target = fg_mask.unsqueeze(-1)
                 reg_target = gt_bboxes_per_image[matched_gt_inds]
             cls_targets.append(cls_target)
             reg_targets.append(reg_target)
@@ -201,12 +282,26 @@ class YOLOLoss(nn.Module):
 
         num_fg = max(num_fg, 1)
         loss_iou = (self.iou_loss(bbox_preds.view(-1, 4)[fg_masks], reg_targets)).sum()
-        loss_obj = (self.bcewithlog_loss(obj_preds.view(-1, 1), obj_targets)).sum()
+
+        obj_logits = obj_preds.view(-1, 1)
+        obj_bce = self.bcewithlog_loss(obj_logits, obj_targets)
+        if self.use_qfl:
+            # Quality Focal Loss: focal weight |target - sigmoid(pred)|^beta so
+            # the head concentrates on anchors whose score is far from their
+            # localization-quality target (hard / mis-ranked examples).
+            with torch.cuda.amp.autocast(enabled=False):
+                obj_prob = obj_logits.detach().float().sigmoid()
+                focal_w = (obj_targets.float() - obj_prob).abs().pow(self.qfl_beta)
+            obj_bce = obj_bce * focal_w.type_as(obj_bce)
+        if self.use_radar_prior and radar_occupancy is not None:
+            # Up-weight objectness supervision where radar fires.
+            radar_w = 1.0 + self.radar_prior_weight * radar_occupancy.reshape(-1, 1).type_as(obj_bce)
+            obj_bce = obj_bce * radar_w
+        loss_obj = obj_bce.sum()
         loss_cls = (self.bcewithlog_loss(cls_preds.view(-1, self.num_classes)[fg_masks], cls_targets)).sum()
-        reg_weight = 1.0
-        loss_iou = reg_weight * loss_iou / num_fg
-        loss_obj = 2 * loss_obj / num_fg
-        loss_cls = 2 * loss_cls / num_fg
+        loss_iou = self.box_weight * loss_iou / num_fg
+        loss_obj = self.obj_weight * loss_obj / num_fg
+        loss_cls = self.cls_weight * loss_cls / num_fg
         loss = loss_iou + loss_obj + loss_cls
 
         # precision_reg = torch.exp(-self.log_vars[0])

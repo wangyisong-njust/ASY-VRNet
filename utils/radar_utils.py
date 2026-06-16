@@ -15,6 +15,26 @@ ORDER_ALIASES = {
 }
 
 
+def apply_radar_drop(radar, drop_ratio, seed=12345):
+    """Simulate radar degradation/failure at inference for robustness curves.
+
+    ``radar`` is a tensor shaped [..., C, H, W]. ``drop_ratio`` in [0, 1] is the
+    fraction of radar removed: 0 leaves it unchanged, 1 fully zeros it (vision
+    only), and a value in between randomly zeros that fraction of spatial
+    locations (mask shared across channels). The mask is drawn with a fixed
+    seed so the curve is reproducible across runs.
+    """
+    drop_ratio = float(drop_ratio)
+    if drop_ratio <= 0.0:
+        return radar
+    if drop_ratio >= 1.0:
+        return torch.zeros_like(radar)
+    h, w = radar.shape[-2:]
+    generator = torch.Generator().manual_seed(int(seed))
+    keep = (torch.rand(1, 1, h, w, generator=generator) >= drop_ratio).to(radar.dtype)
+    return radar * keep.to(radar.device)
+
+
 def _parse_order(order):
     if order is None:
         return []
@@ -160,8 +180,36 @@ def align_radar_map(radar_data, image_size, input_shape, align_mode="letterbox",
     raise ValueError(f"Unsupported radar align mode: {align_mode!r}")
 
 
+def _env_bool(name, default):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.lower() in {"1", "true", "yes", "y", "on"}
+
+
+def load_radar_npz_legacy(radar_root, image_id, image_size, input_shape, align_mode="letterbox"):
+    """Load radar maps exactly like the previous high-score training path."""
+    from utils.utils import preprocess_input_radar
+
+    radar_path = os.path.join(radar_root, image_id + ".npz")
+    radar_data = np.load(radar_path)["arr_0"]
+    radar_data = align_radar_map(
+        radar_data,
+        image_size,
+        input_shape,
+        align_mode=align_mode,
+        preserve_points=False,
+    )
+    return preprocess_input_radar(radar_data)
+
+
 def load_radar_npz(radar_root, image_id, image_size, input_shape, normalize=False, align_mode="letterbox",
-                   source_order=None, target_order=None, preserve_points=None):
+                   source_order=None, target_order=None, preserve_points=None, legacy_preprocess=None):
+    if legacy_preprocess is None:
+        legacy_preprocess = _env_bool("ASY_RADAR_LEGACY_PREPROCESS", False)
+    if legacy_preprocess:
+        return load_radar_npz_legacy(radar_root, image_id, image_size, input_shape, align_mode=align_mode)
+
     radar_path = os.path.join(radar_root, image_id + ".npz")
     radar_data = np.load(radar_path)["arr_0"]
     radar_data = reorder_radar_channels(radar_data, source_order=source_order, target_order=target_order)

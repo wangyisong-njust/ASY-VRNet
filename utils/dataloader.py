@@ -46,7 +46,8 @@ class YoloDataset(Dataset):
     def __init__(self, annotation_lines, input_shape, num_classes, num_classes_seg, epoch_length, radar_root, \
                  mosaic, mixup, mosaic_prob, mixup_prob, seg_dataset_path, train, special_aug_ratio=0.7,
                  radar_align_mode="letterbox", radar_normalize=False, radar_preserve_points=None,
-                 radar_source_order=None, radar_target_order=None):
+                 radar_source_order=None, radar_target_order=None, radar_legacy_preprocess=False,
+                 weather_aug=False):
         super(YoloDataset, self).__init__()
 
         # ------------------------- 通用 --------------------------- #
@@ -79,6 +80,8 @@ class YoloDataset(Dataset):
         self.radar_preserve_points = radar_preserve_points
         self.radar_source_order = radar_source_order
         self.radar_target_order = radar_target_order
+        self.radar_legacy_preprocess = radar_legacy_preprocess
+        self.weather_aug = weather_aug
         # ---------------------------------------------------------- #
 
     def __len__(self):
@@ -144,6 +147,7 @@ class YoloDataset(Dataset):
             source_order=self.radar_source_order,
             target_order=self.radar_target_order,
             preserve_points=self.radar_preserve_points,
+            legacy_preprocess=self.radar_legacy_preprocess,
         )
         # ------------------------------#
         #   获得预测框
@@ -171,7 +175,7 @@ class YoloDataset(Dataset):
         #   自然天气数据增强。论文实验设置使用 Albumentations 的天气增强；
         #   这里只增强图像，不改动检测框、分割标签和雷达 REVP map。
         # ---------------------------------#
-        if random:
+        if random and self.weather_aug:
             weather_random_number = rd.randint(0, 100)
             image_aug = np.array(new_image, np.float32)
             if 0 <= weather_random_number < 15:

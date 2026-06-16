@@ -12,7 +12,7 @@ import torch.nn.functional as F
 from PIL import Image
 from tqdm import tqdm
 
-from utils.radar_utils import load_radar_npz, radar_to_tensor
+from utils.radar_utils import apply_radar_drop, load_radar_npz, radar_to_tensor
 from utils.utils import cvtColor, get_classes, preprocess_input, resize_image
 from utils.utils_map import get_coco_map
 from utils_seg.utils_metrics import compute_mIoU
@@ -64,7 +64,8 @@ def parse_args():
     )
     parser.add_argument("--out_dir", default="paper_metrics_out")
     parser.add_argument("--phi", default="l")
-    parser.add_argument("--confidence", type=float, default=0.05)
+    parser.add_argument("--confidence", type=float, default=0.001)
+    parser.add_argument("--max_boxes", type=int, default=100)
     parser.add_argument("--nms_iou", type=float, default=0.5)
     parser.add_argument("--input_shape", type=int, nargs=2, default=[320, 320])
     parser.add_argument("--num_seg_classes", type=int, default=9)
@@ -76,10 +77,23 @@ def parse_args():
     parser.add_argument("--no_radar_preserve_points", action="store_false", dest="radar_preserve_points")
     parser.add_argument("--radar_source_order", default=os.environ.get("ASY_RADAR_SOURCE_ORDER", "range,doppler,elevation,power"))
     parser.add_argument("--radar_target_order", default=os.environ.get("ASY_RADAR_TARGET_ORDER", "range,elevation,velocity,power"))
+    parser.add_argument("--radar_legacy_preprocess", action="store_true", default=env_bool("ASY_RADAR_LEGACY_PREPROCESS", False))
+    parser.add_argument("--no_radar_legacy_preprocess", action="store_false", dest="radar_legacy_preprocess")
     parser.add_argument("--fusion_mode", default=os.environ.get("ASY_FUSION_MODE", "baseline"))
     parser.add_argument("--radar_dropout", type=float, default=float(os.environ.get("ASY_RADAR_DROPOUT", "0.0")))
+    parser.add_argument(
+        "--radar_drop_ratio",
+        type=float,
+        default=float(os.environ.get("ASY_RADAR_DROP_RATIO", "0.0")),
+        help="Inference-time radar degradation in [0,1] for robustness curves (0=full radar, 1=radar off).",
+    )
     parser.add_argument("--task_loss", default=os.environ.get("ASY_TASK_LOSS", "uncertainty"))
-    parser.add_argument("--small_area", type=float, default=32 * 32)
+    parser.add_argument(
+        "--small_area",
+        type=float,
+        default=float(os.environ.get("ASY_SMALL_AREA", 64 * 64)),
+        help="Object-area threshold for the Table VI small-object subset.",
+    )
     parser.add_argument(
         "--small_area_space",
         choices=["original", "input"],
@@ -88,10 +102,43 @@ def parse_args():
     )
     parser.add_argument(
         "--dark_times",
-        default=os.environ.get("ASY_DARK_TIMES", "night,nightfall"),
+        default=os.environ.get("ASY_DARK_TIMES", "night"),
         help="Comma-separated WaterScenes time values treated as the dark subset.",
     )
+    parser.add_argument(
+        "--dim_lightings",
+        default=os.environ.get("ASY_DIM_LIGHTINGS", "dim"),
+        help="Comma-separated lighting values for the Table VI dim subset; use all to disable this filter.",
+    )
+    parser.add_argument(
+        "--dim_times",
+        default=os.environ.get("ASY_DIM_TIMES", "daytime,night"),
+        help="Comma-separated time values for the Table VI dim subset; use all to disable this filter.",
+    )
+    parser.add_argument(
+        "--dim_weathers",
+        default=os.environ.get("ASY_DIM_WEATHERS", "overcast,rainy"),
+        help="Comma-separated weather values for the Table VI dim subset; use all to disable this filter.",
+    )
+    parser.add_argument(
+        "--reuse_outputs",
+        action="store_true",
+        help="Reuse an existing out_dir/map_out and segmentation-results to recompute metrics without rerunning inference.",
+    )
     parser.add_argument("--disable_subset_metrics", action="store_true")
+    # ---- Innovation 3: Radar-aware Test-Time Refinement ----
+    parser.add_argument("--tta", action="store_true", default=env_bool("ASY_TTA", False),
+                        help="Enable radar-aware multi-scale + flip test-time refinement (WBF).")
+    parser.add_argument("--tta_scales", default=os.environ.get("ASY_TTA_SCALES", "320,384,448"),
+                        help="Comma-separated square input sizes for multi-scale TTA.")
+    parser.add_argument("--tta_flip", action="store_true", default=env_bool("ASY_TTA_FLIP", True))
+    parser.add_argument("--no_tta_flip", action="store_false", dest="tta_flip")
+    parser.add_argument("--tta_radar_alpha", type=float, default=float(os.environ.get("ASY_TTA_RADAR_ALPHA", "0.5")),
+                        help="Radar-support boost strength: score *= (1 + alpha * support).")
+    parser.add_argument("--tta_wbf_iou", type=float, default=float(os.environ.get("ASY_TTA_WBF_IOU", "0.55")))
+    parser.add_argument("--tta_radar_tau", type=float, default=float(os.environ.get("ASY_TTA_RADAR_TAU", "3.0")))
+    parser.add_argument("--tta_fusion", default=os.environ.get("ASY_TTA_FUSION", "nms"), choices=["nms", "wbf", "softnms"],
+                        help="Merge augmented detections: 'nms' (keep best box), 'wbf' (average), or 'softnms' (radar-aware Gaussian Soft-NMS).")
     parser.add_argument("--cuda", action="store_true", default=True)
     parser.add_argument("--no_cuda", action="store_false", dest="cuda")
     return parser.parse_args()
@@ -126,10 +173,13 @@ def save_segmentation_png(model, image, image_id, args, pred_dir):
         source_order=args.radar_source_order,
         target_order=args.radar_target_order,
         preserve_points=args.radar_preserve_points,
+        legacy_preprocess=args.radar_legacy_preprocess,
     )
     device = torch.device("cuda" if args.cuda and torch.cuda.is_available() else "cpu")
     images = torch.from_numpy(image_data).to(device)
     radar = radar_to_tensor(radar_data, device=device)
+    if getattr(args, "radar_drop_ratio", 0.0) > 0.0:
+        radar = apply_radar_drop(radar, args.radar_drop_ratio)
 
     with torch.no_grad():
         seg = model.net(images, radar)[1][0]
@@ -190,11 +240,27 @@ def has_small_gt_object(annotation_line, input_shape, small_area, area_space="or
     return False
 
 
+def parse_csv_filter(values):
+    value_set = {str(item).strip() for item in values if str(item).strip()}
+    if not value_set or any(item.lower() in {"*", "all", "any"} for item in value_set):
+        return None
+    return value_set
+
+
+def matches_filter(value, allowed):
+    return allowed is None or value in allowed
+
+
 def load_adverse_subsets(info_csv, image_ids, annotation_by_id, input_shape, small_area,
-                         dark_times=("night", "nightfall"), small_area_space="original"):
+                         dark_times=("night",), small_area_space="original",
+                         dim_lightings=("dim",), dim_times=("daytime", "night"),
+                         dim_weathers=("overcast", "rainy")):
     image_id_set = set(image_ids)
     subsets = {"dark": set(), "dim": set(), "small": set()}
-    dark_times = {str(item).strip() for item in dark_times if str(item).strip()}
+    dark_times = parse_csv_filter(dark_times)
+    dim_lightings = parse_csv_filter(dim_lightings)
+    dim_times = parse_csv_filter(dim_times)
+    dim_weathers = parse_csv_filter(dim_weathers)
 
     if os.path.exists(info_csv):
         with open(info_csv, encoding="utf-8") as f:
@@ -202,9 +268,13 @@ def load_adverse_subsets(info_csv, image_ids, annotation_by_id, input_shape, sma
                 image_id = row.get("id", "")
                 if image_id not in image_id_set:
                     continue
-                if row.get("time") in dark_times:
+                if matches_filter(row.get("time"), dark_times):
                     subsets["dark"].add(image_id)
-                if row.get("lighting") == "dim":
+                if (
+                    matches_filter(row.get("lighting"), dim_lightings)
+                    and matches_filter(row.get("time"), dim_times)
+                    and matches_filter(row.get("weather"), dim_weathers)
+                ):
                     subsets["dim"].add(image_id)
     else:
         print(f"Warning: info csv not found, skip dark/dim subset metrics: {info_csv}")
@@ -236,6 +306,12 @@ def copy_detection_subset(map_out_dir, subset_dir, image_ids):
 
 def compute_subset_metrics(class_names, gt_dir, seg_pred_dir, map_out_dir, out_dir, image_ids, args):
     metrics = {}
+    metrics["dark_times"] = ",".join(args.dark_times.split(","))
+    metrics["dim_lightings"] = ",".join(args.dim_lightings.split(","))
+    metrics["dim_times"] = ",".join(args.dim_times.split(","))
+    metrics["dim_weathers"] = ",".join(args.dim_weathers.split(","))
+    metrics["small_area"] = float(args.small_area)
+    metrics["small_area_space"] = args.small_area_space
     for subset_name, subset_ids in image_ids.items():
         metrics[f"{subset_name}_count"] = len(subset_ids)
         if not subset_ids:
@@ -243,6 +319,8 @@ def compute_subset_metrics(class_names, gt_dir, seg_pred_dir, map_out_dir, out_d
             continue
 
         subset_map_dir = os.path.join(out_dir, "subsets", subset_name, "map_out")
+        if os.path.exists(subset_map_dir):
+            shutil.rmtree(subset_map_dir)
         copy_detection_subset(map_out_dir, subset_map_dir, subset_ids)
         subset_coco_stats = get_coco_map(class_names=class_names, path=subset_map_dir)
         subset_det_metrics = coco_stats_to_metrics(subset_coco_stats, prefix=f"{subset_name}_")
@@ -298,11 +376,12 @@ def main():
     os.environ["ASY_RADAR_SOURCE_ORDER"] = args.radar_source_order
     os.environ["ASY_RADAR_TARGET_ORDER"] = args.radar_target_order
     os.environ["ASY_RADAR_PRESERVE_POINTS"] = "1" if args.radar_preserve_points else "0"
+    os.environ["ASY_RADAR_LEGACY_PREPROCESS"] = "1" if args.radar_legacy_preprocess else "0"
     class_names, num_classes = get_classes(args.classes_path)
     with open(args.val_txt, encoding="utf-8") as f:
         val_lines = [line.strip() for line in f if line.strip()]
 
-    if os.path.exists(args.out_dir):
+    if os.path.exists(args.out_dir) and not args.reuse_outputs:
         shutil.rmtree(args.out_dir)
     det_gt_dir = os.path.join(args.out_dir, "map_out", "ground-truth")
     det_dr_dir = os.path.join(args.out_dir, "map_out", "detection-results")
@@ -311,36 +390,66 @@ def main():
     os.makedirs(det_dr_dir, exist_ok=True)
     os.makedirs(seg_pred_dir, exist_ok=True)
 
-    model = YOLO(
-        model_path=args.model_path,
-        classes_path=args.classes_path,
-        radar_root=args.radar_root,
-        input_shape=args.input_shape,
-        num_seg_classes=args.num_seg_classes,
-        radar_in_channels=args.radar_channels,
-        radar_align_mode=args.radar_align_mode,
-        radar_normalize=args.radar_normalize,
-        radar_preserve_points=args.radar_preserve_points,
-        radar_source_order=args.radar_source_order,
-        radar_target_order=args.radar_target_order,
-        fusion_mode=args.fusion_mode,
-        radar_dropout=args.radar_dropout,
-        task_loss_mode=args.task_loss,
-        phi=args.phi,
-        confidence=args.confidence,
-        nms_iou=args.nms_iou,
-        cuda=args.cuda,
-    )
-
     image_ids = []
     annotation_by_id = {}
-    for annotation_line in tqdm(val_lines, desc="Evaluating"):
+    for annotation_line in val_lines:
         image_id, image_path = write_detection_gt(annotation_line, class_names, det_gt_dir)
         image_ids.append(image_id)
         annotation_by_id[image_id] = annotation_line
-        image = Image.open(image_path)
-        model.get_map_txt(image_id, image, class_names, os.path.join(args.out_dir, "map_out"))
-        save_segmentation_png(model, image, image_id, args, seg_pred_dir)
+
+    if args.reuse_outputs:
+        missing = []
+        for path in (det_gt_dir, det_dr_dir, seg_pred_dir):
+            if not os.path.isdir(path):
+                missing.append(path)
+        if missing:
+            raise FileNotFoundError("Cannot reuse outputs; missing: " + ", ".join(missing))
+        print(f"Reusing detection and segmentation outputs from {args.out_dir}")
+    else:
+        model = YOLO(
+            model_path=args.model_path,
+            classes_path=args.classes_path,
+            radar_root=args.radar_root,
+            input_shape=args.input_shape,
+            num_seg_classes=args.num_seg_classes,
+            radar_in_channels=args.radar_channels,
+            radar_align_mode=args.radar_align_mode,
+            radar_normalize=args.radar_normalize,
+            radar_preserve_points=args.radar_preserve_points,
+            radar_source_order=args.radar_source_order,
+            radar_target_order=args.radar_target_order,
+            radar_legacy_preprocess=args.radar_legacy_preprocess,
+            fusion_mode=args.fusion_mode,
+            radar_dropout=args.radar_dropout,
+            radar_drop_ratio=args.radar_drop_ratio,
+            task_loss_mode=args.task_loss,
+            phi=args.phi,
+            confidence=args.confidence,
+            max_boxes=args.max_boxes,
+            nms_iou=args.nms_iou,
+            cuda=args.cuda,
+        )
+
+        tta_scales = None
+        if args.tta:
+            tta_scales = [[int(s), int(s)] for s in str(args.tta_scales).replace(",", " ").split()]
+            print(f"[TTA] Radar-aware test-time refinement ON: scales={tta_scales} "
+                  f"flip={args.tta_flip} radar_alpha={args.tta_radar_alpha} "
+                  f"wbf_iou={args.tta_wbf_iou} radar_tau={args.tta_radar_tau}")
+
+        for annotation_line in tqdm(val_lines, desc="Evaluating"):
+            image_id = os.path.splitext(os.path.basename(annotation_line.split()[0]))[0]
+            image_path = resolve_path(annotation_line.split()[0])
+            image = Image.open(image_path)
+            if args.tta:
+                model.get_map_txt_tta(
+                    image_id, image, class_names, os.path.join(args.out_dir, "map_out"),
+                    scales=tta_scales, flip=args.tta_flip, radar_alpha=args.tta_radar_alpha,
+                    wbf_iou=args.tta_wbf_iou, radar_tau=args.tta_radar_tau, fusion=args.tta_fusion,
+                )
+            else:
+                model.get_map_txt(image_id, image, class_names, os.path.join(args.out_dir, "map_out"))
+            save_segmentation_png(model, image, image_id, args, seg_pred_dir)
 
     map_out_dir = os.path.join(args.out_dir, "map_out")
     coco_stats = get_coco_map(class_names=class_names, path=map_out_dir)
@@ -358,6 +467,9 @@ def main():
             args.small_area,
             dark_times=args.dark_times.split(","),
             small_area_space=args.small_area_space,
+            dim_lightings=args.dim_lightings.split(","),
+            dim_times=args.dim_times.split(","),
+            dim_weathers=args.dim_weathers.split(","),
         )
         subset_metrics = compute_subset_metrics(
             class_names,

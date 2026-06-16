@@ -119,6 +119,15 @@ if __name__ == "__main__":
     # ------------------------------------------------------#
     input_shape = env_shape("ASY_INPUT_SHAPE", [320, 320])
     # ------------------------------------------------------#
+    #   Innovation 3: scale-aware fine-tuning. When ASY_MULTISCALE=1 the train
+    #   loader cycles its input size over ASY_MULTISCALE_SCALES across epochs.
+    #   Validation/eval keep the base input_shape above. Sizes must keep
+    #   size/32 even (ContextCluster fold): 320,384,448 are valid.
+    # ------------------------------------------------------#
+    multiscale_scales = None
+    if os.environ.get("ASY_MULTISCALE", "0") == "1":
+        multiscale_scales = [int(s) for s in os.environ.get("ASY_MULTISCALE_SCALES", "320,384,448").replace(",", " ").split()]
+    # ------------------------------------------------------#
     #   所使用的YoloX的版本。nano、tiny、s、m、l
     # ------------------------------------------------------#
     phi = os.environ.get("ASY_PHI", 'l')  # 使用 'l'(width=1.0) 才与 coc_small 预训练权重维度匹配
@@ -133,6 +142,8 @@ if __name__ == "__main__":
     radar_preserve_points = env_bool("ASY_RADAR_PRESERVE_POINTS", True)
     radar_source_order = os.environ.get("ASY_RADAR_SOURCE_ORDER", "range,doppler,elevation,power")
     radar_target_order = os.environ.get("ASY_RADAR_TARGET_ORDER", "range,elevation,velocity,power")
+    radar_legacy_preprocess = env_bool("ASY_RADAR_LEGACY_PREPROCESS", False)
+    weather_aug = env_bool("ASY_WEATHER_AUG", False)
     fusion_mode = os.environ.get("ASY_FUSION_MODE", "baseline").lower()
     radar_dropout = env_float("ASY_RADAR_DROPOUT", 0.0)
     task_loss_mode = os.environ.get("ASY_TASK_LOSS", "uncertainty").lower()
@@ -140,6 +151,9 @@ if __name__ == "__main__":
         raise ValueError(f"Unsupported ASY_FUSION_MODE={fusion_mode!r}")
     if task_loss_mode not in {"sum", "uncertainty"}:
         raise ValueError(f"Unsupported ASY_TASK_LOSS={task_loss_mode!r}")
+    best_metric = os.environ.get("ASY_BEST_METRIC", "det").lower()
+    if best_metric not in {"det", "seg", "total"}:
+        raise ValueError(f"Unsupported ASY_BEST_METRIC={best_metric!r}")
     if radar_align_mode not in {"resize", "direct", "letterbox", "none"}:
         raise ValueError(f"Unsupported ASY_RADAR_ALIGN_MODE={radar_align_mode!r}")
 
@@ -336,7 +350,15 @@ if __name__ == "__main__":
     # ------------------------------------------------------#
     ngpus_per_node = torch.cuda.device_count()
     if distributed:
-        dist.init_process_group(backend="nccl")
+        # Use a long collective timeout (default is only 10 min). The rank-0
+        # mid-training mAP eval can take ~10-15 min on the full val set; with the
+        # default timeout the other ranks' next collective trips the NCCL
+        # watchdog and the whole job SIGABRTs. A 2h timeout makes eval-during-DDP
+        # safe regardless of val-set size.
+        dist.init_process_group(
+            backend="nccl",
+            timeout=datetime.timedelta(hours=2),
+        )
         local_rank = int(os.environ["LOCAL_RANK"])
         rank = int(os.environ["RANK"])
         device = torch.device("cuda", local_rank)
@@ -503,7 +525,13 @@ if __name__ == "__main__":
         radar_preserve_points=radar_preserve_points,
         radar_source_order=radar_source_order,
         radar_target_order=radar_target_order,
-        radar_dropout=radar_dropout, task_loss_mode=task_loss_mode
+        radar_legacy_preprocess=radar_legacy_preprocess,
+        weather_aug=weather_aug,
+        radar_dropout=radar_dropout, task_loss_mode=task_loss_mode,
+        best_metric=best_metric,
+        yolo_box_weight=yolo_loss.box_weight,
+        yolo_obj_weight=yolo_loss.obj_weight,
+        yolo_cls_weight=yolo_loss.cls_weight
     )
     # ---------------------------------------------------------#
     #   总训练世代指的是遍历全部数据的总次数
@@ -609,7 +637,9 @@ if __name__ == "__main__":
                                     radar_normalize=radar_normalize,
                                     radar_preserve_points=radar_preserve_points,
                                     radar_source_order=radar_source_order,
-                                    radar_target_order=radar_target_order)
+                                    radar_target_order=radar_target_order,
+                                    radar_legacy_preprocess=radar_legacy_preprocess,
+                                    weather_aug=weather_aug)
 
         val_dataset = YoloDataset(annotation_lines=val_lines, input_shape=input_shape, num_classes=num_classes,
                                   epoch_length=UnFreeze_Epoch, \
@@ -620,7 +650,9 @@ if __name__ == "__main__":
                                   radar_normalize=radar_normalize,
                                   radar_preserve_points=radar_preserve_points,
                                   radar_source_order=radar_source_order,
-                                  radar_target_order=radar_target_order)
+                                  radar_target_order=radar_target_order,
+                                  radar_legacy_preprocess=radar_legacy_preprocess,
+                                  weather_aug=False)
 
         # ---------------------------------------#
         #   构建分割数据集加载器。
@@ -672,7 +704,8 @@ if __name__ == "__main__":
                                          radar_normalize=radar_normalize,
                                          radar_preserve_points=radar_preserve_points,
                                          radar_source_order=radar_source_order,
-                                         radar_target_order=radar_target_order)
+                                         radar_target_order=radar_target_order,
+                                         radar_legacy_preprocess=radar_legacy_preprocess)
             eval_callback_seg = EvalCallback_seg(model, input_shape, num_classes_seg, val_lines, VOCdevkit_path,
                                                  log_dir_seg, Cuda, eval_flag=eval_flag, period=eval_period,
                                                  radar_path=radar_file_path, local_rank=local_rank,
@@ -680,7 +713,8 @@ if __name__ == "__main__":
                                                  radar_normalize=radar_normalize,
                                                  radar_preserve_points=radar_preserve_points,
                                                  radar_source_order=radar_source_order,
-                                                 radar_target_order=radar_target_order)
+                                                 radar_target_order=radar_target_order,
+                                                 radar_legacy_preprocess=radar_legacy_preprocess)
         else:
             eval_callback = None
             eval_callback_seg = None
@@ -736,6 +770,22 @@ if __name__ == "__main__":
 
             gen.dataset.epoch_now = epoch
             gen_val.dataset.epoch_now = epoch
+
+            # ---------------------------------------------------------------#
+            #   Innovation 3: scale-aware fine-tuning. Cycle the TRAIN input
+            #   size across epochs (validation stays at the base shape). The
+            #   scale is a deterministic function of the epoch index so every
+            #   DDP rank uses the same size on a given step. Workers respawn
+            #   each epoch (persistent_workers=False), so they pick up the new
+            #   dataset.input_shape. Sizes must keep size/32 even for the
+            #   ContextCluster fold; {320,384,448} satisfy this.
+            # ---------------------------------------------------------------#
+            if multiscale_scales:
+                ms = multiscale_scales[epoch % len(multiscale_scales)]
+                gen.dataset.input_shape = [ms, ms]
+                if local_rank == 0:
+                    print(f"[multiscale] epoch {epoch}: train input_shape={ms}")
+
             if distributed:
                 train_sampler.set_epoch(epoch)
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """Check image/box/segmentation/radar preprocessing alignment.
 
 The goal is to verify the exact tensors that enter training. For each sampled

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """Audit the ASY-VRNet detection data and decode path.
 
 This script does not train or evaluate metrics. It checks the assumptions that

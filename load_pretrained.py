@@ -7,6 +7,7 @@
 3. mlp 权重形状：CoC 是 Linear (C_out, C_in)，VRCoC 是 Conv2d (C_out, C_in, 1, 1)
 4. 只加载视觉流（network），跳过 patch_embed_radar、radar_enhance 等雷达专属模块
 """
+from __future__ import annotations
 
 import torch
 

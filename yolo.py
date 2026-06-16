@@ -12,7 +12,7 @@ from nets.efficient_vrnet import EfficientVRNet
 from utils.utils import (cvtColor, get_classes, preprocess_input, resize_image,
                          show_config, preprocess_input_radar)
 from utils.utils_bbox import decode_outputs, non_max_suppression
-from utils.radar_utils import load_radar_npz, radar_to_tensor
+from utils.radar_utils import apply_radar_drop, load_radar_npz, radar_to_tensor
 
 '''
 训练自己的数据集必看注释！
@@ -68,8 +68,11 @@ class YOLO(object):
         "radar_preserve_points": env_bool("ASY_RADAR_PRESERVE_POINTS", True),
         "radar_source_order": os.environ.get("ASY_RADAR_SOURCE_ORDER", "range,doppler,elevation,power"),
         "radar_target_order": os.environ.get("ASY_RADAR_TARGET_ORDER", "range,elevation,velocity,power"),
+        "radar_legacy_preprocess": env_bool("ASY_RADAR_LEGACY_PREPROCESS", False),
         "fusion_mode": os.environ.get("ASY_FUSION_MODE", "baseline"),
         "radar_dropout": float(os.environ.get("ASY_RADAR_DROPOUT", "0.0")),
+        # Inference-time radar degradation for robustness curves (0 = full radar).
+        "radar_drop_ratio": float(os.environ.get("ASY_RADAR_DROP_RATIO", "0.0")),
         "task_loss_mode": os.environ.get("ASY_TASK_LOSS", "uncertainty"),
         # ---------------------------------------------------------------------#
         #   所使用的YoloX的版本。nano、tiny、s、m、l、x
@@ -79,6 +82,7 @@ class YOLO(object):
         #   只有得分大于置信度的预测框会被保留下来
         # ---------------------------------------------------------------------#
         "confidence": env_float("ASY_CONFIDENCE", 0.3),
+        "max_boxes": int(os.environ.get("ASY_MAX_BOXES", "100")),
         # ---------------------------------------------------------------------#
         #   非极大抑制所用到的nms_iou大小
         # ---------------------------------------------------------------------#
@@ -116,6 +120,7 @@ class YOLO(object):
         self.radar_align_mode = str(self.radar_align_mode).lower()
         self.radar_normalize = bool(self.radar_normalize)
         self.radar_dropout = float(self.radar_dropout)
+        self.radar_drop_ratio = float(getattr(self, "radar_drop_ratio", 0.0))
         self.fusion_mode = str(self.fusion_mode).lower()
         self.task_loss_mode = str(self.task_loss_mode).lower()
 
@@ -171,19 +176,248 @@ class YOLO(object):
     def _device(self):
         return torch.device('cuda' if self.cuda and torch.cuda.is_available() else 'cpu')
 
-    def _prepare_radar(self, image_id, image):
+    def _prepare_radar(self, image_id, image, input_shape=None, flip=False):
         radar_data = load_radar_npz(
             self.radar_root,
             image_id,
             image.size,
-            self.input_shape,
+            input_shape if input_shape is not None else self.input_shape,
             normalize=self.radar_normalize,
             align_mode=self.radar_align_mode,
             source_order=self.radar_source_order,
             target_order=self.radar_target_order,
             preserve_points=self.radar_preserve_points,
+            legacy_preprocess=self.radar_legacy_preprocess,
         )
-        return radar_to_tensor(radar_data, device=self._device()).float()
+        if flip:
+            radar_data = radar_data[:, :, ::-1].copy()
+        radar = radar_to_tensor(radar_data, device=self._device()).float()
+        if self.radar_drop_ratio > 0.0:
+            radar = apply_radar_drop(radar, self.radar_drop_ratio)
+        return radar
+
+    # ===================================================================== #
+    #   Innovation 3: Radar-aware Test-Time Refinement.
+    #   Multi-scale + horizontal-flip augmentations are fused with a
+    #   Weighted Box Fusion whose per-detection weight is modulated by the
+    #   amount of radar evidence falling inside each box. Boxes backed by
+    #   radar returns (real on-water targets) are up-weighted relative to
+    #   camera-only detections (frequent background/clutter false positives),
+    #   which improves cross-image ranking and therefore COCO mAP.
+    # ===================================================================== #
+    def _radar_point_mask(self, image_id):
+        """Binary radar-occupancy map in the radar npz's native resolution."""
+        radar_path = os.path.join(self.radar_root, image_id + ".npz")
+        radar_raw = np.load(radar_path)["arr_0"]
+        radar_raw = np.asarray(radar_raw, dtype=np.float32)
+        return np.any(np.abs(radar_raw) > 0.0, axis=0)  # [Hr, Wr]
+
+    def _box_radar_support(self, boxes_xyxy, point_mask, image_w, image_h, tau=3.0):
+        """Saturating radar support in [0,1) for each box (x1,y1,x2,y2 in image px)."""
+        if point_mask is None or point_mask.size == 0:
+            return np.zeros(len(boxes_xyxy), dtype=np.float32)
+        hr, wr = point_mask.shape
+        sx = wr / max(float(image_w), 1.0)
+        sy = hr / max(float(image_h), 1.0)
+        support = np.zeros(len(boxes_xyxy), dtype=np.float32)
+        for i, (x1, y1, x2, y2) in enumerate(boxes_xyxy):
+            rx1 = int(np.clip(np.floor(x1 * sx), 0, wr - 1))
+            rx2 = int(np.clip(np.ceil(x2 * sx), 1, wr))
+            ry1 = int(np.clip(np.floor(y1 * sy), 0, hr - 1))
+            ry2 = int(np.clip(np.ceil(y2 * sy), 1, hr))
+            if rx2 <= rx1 or ry2 <= ry1:
+                continue
+            count = float(point_mask[ry1:ry2, rx1:rx2].sum())
+            support[i] = 1.0 - np.exp(-count / tau)
+        return support
+
+    def _infer_scale(self, image, image_id, image_shape, input_shape, flip=False):
+        """Run one augmented forward pass; return per-image detections [N,6]:
+        x1,y1,x2,y2 (image px), score, label."""
+        image_data = resize_image(image, (input_shape[1], input_shape[0]), self.letterbox_image)
+        arr = np.array(image_data, dtype='float32')
+        if flip:
+            arr = arr[:, ::-1, :].copy()
+        image_data = np.expand_dims(np.transpose(preprocess_input(arr), (2, 0, 1)), 0)
+        radar_data = self._prepare_radar(image_id, image, input_shape=input_shape, flip=flip)
+        with torch.no_grad():
+            images = torch.from_numpy(image_data)
+            if self.cuda:
+                images = images.cuda()
+            outputs, _ = self.net(images, radar_data)
+            outputs = decode_outputs(outputs, input_shape)
+            if flip:
+                # un-flip normalized centre-x so boxes land in the original frame
+                outputs[..., 0] = 1.0 - outputs[..., 0]
+            results = non_max_suppression(outputs, self.num_classes, input_shape,
+                                          image_shape, self.letterbox_image,
+                                          conf_thres=self.confidence, nms_thres=self.nms_iou)
+        if results[0] is None:
+            return np.zeros((0, 6), dtype=np.float32)
+        res = results[0]
+        # non_max_suppression returns boxes as [top, left, bottom, right] = y1,x1,y2,x2
+        y1, x1, y2, x2 = res[:, 0], res[:, 1], res[:, 2], res[:, 3]
+        score = res[:, 4] * res[:, 5]
+        label = res[:, 6]
+        return np.stack([x1, y1, x2, y2, score, label], axis=1).astype(np.float32)
+
+    @staticmethod
+    def _radar_soft_nms(boxes, scores, labels, support, sigma=0.5, beta=0.0,
+                        score_thr=1e-3, iou_hard=None):
+        """Class-aware Gaussian Soft-NMS with radar-modulated decay.
+
+        For each surviving box, overlapping lower-scored boxes have their score
+        multiplied by exp(-iou^2 / sigma_eff). Boxes carrying radar evidence get a
+        wider sigma_eff = sigma * (1 + beta * support), i.e. they are decayed less
+        and are more likely to be kept. Coordinates are never modified.
+        """
+        keep_boxes, keep_scores, keep_labels = [], [], []
+        for c in np.unique(labels):
+            idx = np.where(labels == c)[0]
+            b = boxes[idx].astype(np.float64).copy()
+            s = scores[idx].astype(np.float64).copy()
+            sup = support[idx].astype(np.float64).copy()
+            area = np.maximum(b[:, 2] - b[:, 0], 0) * np.maximum(b[:, 3] - b[:, 1], 0)
+            while True:
+                if s.size == 0 or s.max() < score_thr:
+                    break
+                m = int(np.argmax(s))
+                keep_boxes.append(b[m].copy())
+                keep_scores.append(float(s[m]))
+                keep_labels.append(int(c))
+                # IoU of the picked box against the rest
+                xx1 = np.maximum(b[m, 0], b[:, 0]); yy1 = np.maximum(b[m, 1], b[:, 1])
+                xx2 = np.minimum(b[m, 2], b[:, 2]); yy2 = np.minimum(b[m, 3], b[:, 3])
+                w = np.maximum(xx2 - xx1, 0.0); h = np.maximum(yy2 - yy1, 0.0)
+                inter = w * h
+                iou = inter / (area[m] + area - inter + 1e-9)
+                # radar-widened sigma protects radar-backed boxes from decay
+                sigma_eff = sigma * (1.0 + beta * sup)
+                decay = np.exp(-(iou ** 2) / np.maximum(sigma_eff, 1e-6))
+                decay[m] = 0.0  # remove the picked box from the pool
+                s = s * decay
+                # drop fully-decayed entries to keep the loop finite
+                alive = s >= score_thr
+                b, s, sup, area = b[alive], s[alive], sup[alive], area[alive]
+            # (picked boxes already recorded above)
+        if not keep_boxes:
+            return np.zeros((0, 4), np.float32), np.zeros((0,), np.float32), np.zeros((0,), np.int32)
+        return (np.asarray(keep_boxes, np.float32),
+                np.asarray(keep_scores, np.float32),
+                np.asarray(keep_labels, np.int32))
+
+    def get_map_txt_tta(self, image_id, image, class_names, map_out_path,
+                        scales=None, flip=True, radar_alpha=0.5,
+                        wbf_iou=0.55, skip_thr=0.0, radar_tau=3.0, fusion="nms"):
+        f = open(os.path.join(map_out_path, "detection-results/" + image_id + ".txt"), "w")
+        image_shape = np.array(np.shape(image)[0:2])  # (H, W)
+        image = cvtColor(image)
+        iw, ih = image.size
+        if scales is None:
+            scales = [self.input_shape]
+
+        point_mask = None
+        try:
+            point_mask = self._radar_point_mask(image_id)
+        except Exception:
+            point_mask = None
+
+        # Collect detections from every augmentation in original-image pixel coords.
+        all_boxes, all_scores, all_labels, all_support = [], [], [], []
+        for s in scales:
+            input_shape = [int(s[0]), int(s[1])] if isinstance(s, (list, tuple)) else [int(s), int(s)]
+            views = [False, True] if flip else [False]
+            for fl in views:
+                det = self._infer_scale(image, image_id, image_shape, input_shape, flip=fl)
+                if det.shape[0] == 0:
+                    continue
+                boxes_xyxy = det[:, :4].astype(np.float32)
+                score = det[:, 4].astype(np.float32)
+                label = det[:, 5].astype(np.int32)
+                support = self._box_radar_support(boxes_xyxy, point_mask, iw, ih, tau=radar_tau)
+                if fusion != "softnms":
+                    # global radar boost (used by nms/wbf paths)
+                    score = score * (1.0 + radar_alpha * support)
+                all_boxes.append(boxes_xyxy)
+                all_scores.append(score)
+                all_labels.append(label)
+                all_support.append(support.astype(np.float32))
+
+        if not all_boxes:
+            f.close()
+            return
+
+        all_boxes = np.concatenate(all_boxes, axis=0)
+        all_scores = np.concatenate(all_scores, axis=0)
+        all_labels = np.concatenate(all_labels, axis=0)
+        all_support = np.concatenate(all_support, axis=0)
+
+        if fusion == "softnms":
+            # Radar-aware Gaussian Soft-NMS: overlapping boxes are decayed rather
+            # than removed, and boxes with radar evidence are decayed less (a wider
+            # sigma), so genuine on-water targets survive crowded suppression while
+            # camera-only duplicates fade. Box coordinates are never moved, so tight
+            # localization (AP75) is preserved.
+            fused_boxes, fused_scores, fused_labels = self._radar_soft_nms(
+                all_boxes, all_scores, all_labels, all_support,
+                sigma=0.5, beta=radar_alpha, score_thr=1e-3,
+            )
+            if len(fused_scores) == 0:
+                f.close()
+                return
+        elif fusion == "wbf":
+            from ensemble_boxes import weighted_boxes_fusion
+            nb = all_boxes.copy()
+            nb[:, [0, 2]] = np.clip(nb[:, [0, 2]] / max(iw, 1), 0.0, 1.0)
+            nb[:, [1, 3]] = np.clip(nb[:, [1, 3]] / max(ih, 1), 0.0, 1.0)
+            fused_boxes, fused_scores, fused_labels = weighted_boxes_fusion(
+                [nb.tolist()], [all_scores.tolist()], [all_labels.tolist()],
+                iou_thr=wbf_iou, skip_box_thr=skip_thr,
+            )
+            fused_boxes = np.asarray(fused_boxes, dtype=np.float32)
+            if len(fused_boxes) == 0:
+                f.close()
+                return
+            fused_boxes[:, [0, 2]] *= iw
+            fused_boxes[:, [1, 3]] *= ih
+            fused_scores = np.asarray(fused_scores, dtype=np.float32)
+            fused_labels = np.asarray(fused_labels, dtype=np.int32)
+        else:
+            # Plain class-aware NMS over the pooled augmentations: keeps the
+            # best-localized box and its original (radar-boosted) score, so the
+            # multi-scale recall gain is kept without smearing localization.
+            from torchvision.ops import boxes as box_ops
+            tb = torch.from_numpy(all_boxes)
+            ts = torch.from_numpy(all_scores)
+            tl = torch.from_numpy(all_labels.astype(np.int64))
+            keep = box_ops.batched_nms(tb, ts, tl, self.nms_iou).numpy()
+            fused_boxes = all_boxes[keep]
+            fused_scores = all_scores[keep]
+            fused_labels = all_labels[keep]
+
+        if len(fused_scores) > self.max_boxes:
+            keep = np.argsort(fused_scores)[::-1][:self.max_boxes]
+            fused_boxes = fused_boxes[keep]
+            fused_scores = fused_scores[keep]
+            fused_labels = fused_labels[keep]
+
+        for box, score, c in zip(fused_boxes, fused_scores, fused_labels):
+            predicted_class = self.class_names[int(c)]
+            if predicted_class not in class_names:
+                continue
+            left, top, right, bottom = box
+            left = max(0.0, min(float(left), float(iw)))
+            top = max(0.0, min(float(top), float(ih)))
+            right = max(0.0, min(float(right), float(iw)))
+            bottom = max(0.0, min(float(bottom), float(ih)))
+            if right <= left or bottom <= top:
+                continue
+            f.write(
+                f"{predicted_class} {float(score):.8f} "
+                f"{left:.2f} {top:.2f} {right:.2f} {bottom:.2f}\n"
+            )
+        f.close()
+        return
 
     # ---------------------------------------------------#
     #   检测图片
@@ -519,6 +753,11 @@ class YOLO(object):
             top_label = np.array(results[0][:, 6], dtype='int32')
             top_conf = results[0][:, 4] * results[0][:, 5]
             top_boxes = results[0][:, :4]
+            if len(top_conf) > self.max_boxes:
+                keep = np.argsort(top_conf)[::-1][:self.max_boxes]
+                top_label = top_label[keep]
+                top_conf = top_conf[keep]
+                top_boxes = top_boxes[keep]
 
         for i, c in list(enumerate(top_label)):
             predicted_class = self.class_names[int(c)]

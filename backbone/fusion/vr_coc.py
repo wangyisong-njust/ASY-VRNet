@@ -298,6 +298,28 @@ def basic_blocks(dim, index, layers,
     return blocks
 
 
+def init_reliability_gate_as_identity(gate, bias=4.0):
+    """Start reliability fusion so that the gate is fully open (gate ~= 1).
+
+    The fused output is computed as ``base + gate * (enhanced - base)``,
+    so ``gate == 1`` reproduces the original baseline fusion branch exactly
+    while ``gate == 0`` falls back to the un-enhanced (single-modality)
+    feature. To keep a fine-tune from a reproduced high-score baseline on the
+    same feature distribution it was trained on, the gate must START fully
+    open: zero the last conv weight and set a LARGE POSITIVE bias so that
+    ``sigmoid(bias) ~= 1``. A negative bias would silently disable the whole
+    cross-modal enhancement at init and destroy the detection features.
+    """
+    if gate is None:
+        return
+    for module in reversed(gate):
+        if isinstance(module, nn.Conv2d):
+            nn.init.zeros_(module.weight)
+            if module.bias is not None:
+                nn.init.constant_(module.bias, bias)
+            return
+
+
 class ImageEnhanceByRadar(nn.Module):
     def __init__(self, radar_in_channels, image_in_channels, fusion_mode="baseline"):
         super(ImageEnhanceByRadar, self).__init__()
@@ -307,15 +329,25 @@ class ImageEnhanceByRadar(nn.Module):
         self.radar_projection = BaseConv(in_channels=self.radar_in_channels, out_channels=self.image_in_channels,
                                          ksize=3, stride=1)
         if fusion_mode == "reliability":
+            # ASY_GATE_DENSITY=1 (default): append a radar-occupancy density map to
+            # the gate input so the gate can explicitly see "is radar available here?"
+            # rather than having to infer it from the feature magnitudes alone.
+            self.gate_density = os.environ.get("ASY_GATE_DENSITY", "1") == "1"
+            gate_in_ch = self.image_in_channels + self.radar_in_channels + (1 if self.gate_density else 0)
             hidden_channels = max(8, min(self.image_in_channels, 64))
+            # GroupNorm instead of BatchNorm: independent of batch statistics so
+            # the identity init stays exact and fine-tuning on small batches does
+            # not inject noisy running stats into the fused features.
             self.reliability_gate = nn.Sequential(
-                nn.Conv2d(self.image_in_channels + self.radar_in_channels, hidden_channels, kernel_size=1),
-                nn.BatchNorm2d(hidden_channels),
+                nn.Conv2d(gate_in_ch, hidden_channels, kernel_size=1),
+                nn.GroupNorm(1, hidden_channels),
                 nn.SiLU(inplace=True),
                 nn.Conv2d(hidden_channels, self.image_in_channels, kernel_size=1),
                 nn.Sigmoid(),
             )
+            init_reliability_gate_as_identity(self.reliability_gate)
         else:
+            self.gate_density = False
             self.reliability_gate = None
         self.norm = nn.BatchNorm2d(self.image_in_channels)
 
@@ -324,7 +356,19 @@ class ImageEnhanceByRadar(nn.Module):
         key_image_map = (1 + data_normal(key_points_normal)) * image_map
         key_image_map = self.norm(key_image_map)
         if self.reliability_gate is not None:
-            gate = self.reliability_gate(torch.cat([image_map, radar_map], dim=1))
+            gate_input = torch.cat([image_map, radar_map], dim=1)
+            if self.gate_density:
+                # Soft radar-occupancy density: sigmoid(L2-norm across channels).
+                # ~1 where radar features are strong, ~0 where radar is absent.
+                # Detach from the autograd graph: density is a fixed input signal
+                # to the gate, not a differentiable path through radar features.
+                # This prevents DDP gradient-stride mismatches that can hang NCCL.
+                with torch.no_grad():
+                    density = torch.sigmoid(
+                        radar_map.norm(dim=1, keepdim=True).clamp(max=20.0)
+                    )
+                gate_input = torch.cat([gate_input, density], dim=1)
+            gate = self.reliability_gate(gate_input)
             key_image_map = image_map + gate * (key_image_map - image_map)
         return key_image_map
 
@@ -342,15 +386,22 @@ class RadarEnhanceByImage(nn.Module):
         self.inverse_projection = BaseConv(in_channels=self.radar_in_channels + self.image_in_channels,
                                            out_channels=radar_in_channels, ksize=1, stride=1)
         if fusion_mode == "reliability":
+            self.gate_density = os.environ.get("ASY_GATE_DENSITY", "1") == "1"
+            gate_in_ch = self.image_in_channels + self.radar_in_channels + (1 if self.gate_density else 0)
             hidden_channels = max(8, min(self.radar_in_channels, 64))
+            # GroupNorm instead of BatchNorm: independent of batch statistics so
+            # the identity init stays exact and fine-tuning on small batches does
+            # not inject noisy running stats into the fused features.
             self.reliability_gate = nn.Sequential(
-                nn.Conv2d(self.image_in_channels + self.radar_in_channels, hidden_channels, kernel_size=1),
-                nn.BatchNorm2d(hidden_channels),
+                nn.Conv2d(gate_in_ch, hidden_channels, kernel_size=1),
+                nn.GroupNorm(1, hidden_channels),
                 nn.SiLU(inplace=True),
                 nn.Conv2d(hidden_channels, self.radar_in_channels, kernel_size=1),
                 nn.Sigmoid(),
             )
+            init_reliability_gate_as_identity(self.reliability_gate)
         else:
+            self.gate_density = False
             self.reliability_gate = None
         self.norm = nn.BatchNorm2d(self.radar_in_channels)
 
@@ -358,6 +409,12 @@ class RadarEnhanceByImage(nn.Module):
         gate_input = None
         if self.reliability_gate is not None:
             gate_input = torch.cat([image_map, radar_map], dim=1)
+            if self.gate_density:
+                with torch.no_grad():
+                    density = torch.sigmoid(
+                        radar_map.norm(dim=1, keepdim=True).clamp(max=20.0)
+                    )
+                gate_input = torch.cat([gate_input, density], dim=1)
         if self.initial:
             # ------------------- concatenate maps and shuffle with channel attention ---------------------- #
             image_radar_maps = torch.cat([image_map, radar_map], axis=1)
