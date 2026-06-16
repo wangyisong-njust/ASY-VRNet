@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | WaterScenes 数据集（图像 + 5 帧雷达） | 公开数据集，按官方说明下载 | `dataset/VOCdevkit/`、`dataset/VOCradar_5_frames/` |
 | ContextCluster 预训练骨干 `model_best.pth.tar` | 公开预训练权重，按 ContextCluster 官方发布下载 | `model_data/coc_small-bs128-lr0.001-wd0.05-dp0.0-distillnone-224/` |
-| 最终单次前向模型 `greedy_soup_ms_full.pth`（194MB） | 不随仓库提供（超 GitHub 单文件上限）；用 `scripts/greedy_soup.py` 从创新点一与多尺度微调权重再生成（命令见“§3 生成单次前向最优模型汤”），或通过另行提供的链接获取 | `weights/final_greedy_soup.pth` |
+| 最终单次前向模型 `final_greedy_soup.pth`（194MB） | 从 [GitHub Release 下载](https://github.com/wangyisong-njust/ASY-VRNet/releases/download/v1.0-final-model/final_greedy_soup.pth)，或用 `scripts/greedy_soup.py` 从创新点一与多尺度微调权重再生成（命令见“§3 生成单次前向最优模型汤”） | `weights/final_greedy_soup.pth` |
 | 训练中间检查点（创新点一 / 多尺度微调的 epoch 权重） | 不随仓库提供，按下文命令自行训练 | 各 `logs_*/` 目录 |
 
 > 注：最终模型与中间检查点均不随仓库提供，按上表自行训练 / 再生成。仓库只保留最终代码、文档与紧凑的指标摘要（`results/*/paper_metrics.json|csv`）。
