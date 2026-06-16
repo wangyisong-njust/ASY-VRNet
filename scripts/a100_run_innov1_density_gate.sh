@@ -118,8 +118,8 @@ sleep 20
 # Evaluation: best and last checkpoints with paper protocol.
 # ===========================================================================
 eval_ckpts=(
-    "${ASY_SAVE_DIR}/best_epoch_weights.pth:paper_metrics_innovation1_density_gate_best"
-    "${ASY_SAVE_DIR}/last_epoch_weights.pth:paper_metrics_innovation1_density_gate_last"
+    "${ASY_SAVE_DIR}/best_epoch_weights.pth:results/innovation1_density_gate_best"
+    "${ASY_SAVE_DIR}/last_epoch_weights.pth:results/innovation1_density_gate_last"
 )
 
 for entry in "${eval_ckpts[@]}"; do
@@ -157,8 +157,8 @@ done
 echo "DONE" > "${WORK_DIR}/logs/a100_innov1_COMPLETE.flag"
 
 log "ALL DONE. Results ready for pull:"
-log "  paper_metrics_innovation1_density_gate_best/paper_metrics.json"
-log "  paper_metrics_innovation1_density_gate_last/paper_metrics.json"
+log "  results/innovation1_density_gate_best/paper_metrics.json"
+log "  results/innovation1_density_gate_last/paper_metrics.json"
 log "  ${ASY_SAVE_DIR}/best_epoch_weights.pth"
 log ""
-log "  Pull example: rsync -az <user@host>:<remote_repo>/paper_metrics_innovation1_density_gate_best/ ./paper_metrics_innovation1_density_gate_best/"
+log "  Pull example: rsync -az <user@host>:<remote_repo>/results/innovation1_density_gate_best/ ./results/innovation1_density_gate_best/"

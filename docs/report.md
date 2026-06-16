@@ -169,9 +169,9 @@ theta_soup = mean(theta for theta in soup)
 
 | 来源 | 路径 |
 | --- | --- |
-| 候选：质量对齐模型 | `logs_innovation2_qfl_radar_phi_l_5frames_bs64_300e_320/{best, ep140/160/180/200}` |
-| 候选：多尺度微调 best | `logs_multiscale_ft_full_phi_l_5frames_bs48_e50_320/best_epoch_weights.pth` |
-| soup 输出 | `logs_innov2_soup/greedy_soup_ms_full.pth` |
+| 候选：质量对齐模型 | `weights/innov1_qfl_radar_{best, ep140/160/180/200}.pth` |
+| 候选：多尺度微调 best | `weights/multiscale_ft_best.pth` |
+| soup 输出 | `weights/final_greedy_soup.pth` |
 
 ### 效果
 
@@ -352,12 +352,12 @@ Baseline
 
 | 用途 | 权重 / 输出 |
 | --- | --- |
-| 创新点一权重 | `logs_innovation2_qfl_radar_phi_l_5frames_bs64_300e_320/best_epoch_weights.pth` |
-| 多尺度微调权重 | `logs_multiscale_ft_full_phi_l_5frames_bs48_e50_320/best_epoch_weights.pth` |
-| 创新点二 soup 权重（单次前向最终权重） | `logs_innov2_soup/greedy_soup_ms_full.pth` |
-| 创新点二结果 | `paper_metrics_greedy_soup_full/paper_metrics.json` |
-| 创新点三 headline 结果（多尺度 Soft-NMS） | `paper_metrics_ablate_tta_softnms/paper_metrics.json` |
-| 创新点三 雷达调制变体结果 | `paper_metrics_greedy_soup_tta_320_384/paper_metrics.json` |
+| 创新点一权重 | `weights/innov1_qfl_radar_best.pth` |
+| 多尺度微调权重 | `weights/multiscale_ft_best.pth` |
+| 创新点二 soup 权重（单次前向最终权重） | `weights/final_greedy_soup.pth` |
+| 创新点二结果 | `results/greedy_soup_full/paper_metrics.json` |
+| 创新点三 headline 结果（多尺度 Soft-NMS） | `results/ablate_tta_softnms/paper_metrics.json` |
+| 创新点三 雷达调制变体结果 | `results/greedy_soup_tta_320_384/paper_metrics.json` |
 
 关键脚本：训练监督 `nets/yolo_training.py`（`ASY_QFL=1, ASY_RADAR_PRIOR=1`）；多尺度微调 `scripts/a100_run_multiscale_ft_full.sh`；贪心权重融合 `scripts/greedy_soup.py`；测试时精炼 headline `eval_paper_metrics.py --tta --tta_scales 320,384 --tta_fusion softnms --tta_radar_alpha 0.0`（雷达调制变体改 `--tta_radar_alpha 0.5`）。
 

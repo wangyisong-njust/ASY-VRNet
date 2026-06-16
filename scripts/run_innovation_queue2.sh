@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Restarted queue (v2) after fixing fine-tune LR: 1e-3 → 1e-4.
 #
-# Skips innov2 eval (already done, result saved to paper_metrics_innovation2_qfl_radar_best).
+# Skips innov2 eval (already done, result saved to results/innovation2_qfl_radar_best).
 # Runs:
 #   A. innov1 baseline_control  (60e, lr=1e-4, new exp name *_lr1e4)
 #   B. innov1 reliability_fixed (60e, lr=1e-4)
@@ -47,8 +47,8 @@ run_eval "innov1 baseline_control (lr=1e-4)" \
         FUSION_MODE=baseline \
         RADAR_LEGACY_PREPROCESS=1 \
         RADAR_PRESERVE_POINTS=0 \
-        BEST_OUT=paper_metrics_ft_baseline_control_best \
-        LAST_OUT=paper_metrics_ft_baseline_control_last \
+        BEST_OUT=results/ft_baseline_control_best \
+        LAST_OUT=results/ft_baseline_control_last \
         bash scripts/after_train_eval_and_diagnose.sh
 
 # ===========================================================================
@@ -62,8 +62,8 @@ run_eval "innov1 reliability_fixed (lr=1e-4)" \
         FUSION_MODE=reliability \
         RADAR_LEGACY_PREPROCESS=1 \
         RADAR_PRESERVE_POINTS=0 \
-        BEST_OUT=paper_metrics_ft_reliability_fixed_best \
-        LAST_OUT=paper_metrics_ft_reliability_fixed_last \
+        BEST_OUT=results/ft_reliability_fixed_best \
+        LAST_OUT=results/ft_reliability_fixed_last \
         bash scripts/after_train_eval_and_diagnose.sh
 
 # ===========================================================================
@@ -77,11 +77,11 @@ run_eval "innov3 consistency" \
         FUSION_MODE=baseline \
         RADAR_LEGACY_PREPROCESS=1 \
         RADAR_PRESERVE_POINTS=0 \
-        BEST_OUT=paper_metrics_innovation3_consistency_best \
-        LAST_OUT=paper_metrics_innovation3_consistency_last \
+        BEST_OUT=results/innovation3_consistency_best \
+        LAST_OUT=results/innovation3_consistency_last \
         bash scripts/after_train_eval_and_diagnose.sh
 
 log "QUEUE2 COMPLETE. Results in:"
-log "  paper_metrics_ft_baseline_control_best / _last  (innov1 control, lr=1e-4)"
-log "  paper_metrics_ft_reliability_fixed_best / _last (innov1 reliability, lr=1e-4)"
-log "  paper_metrics_innovation3_consistency_best / _last"
+log "  results/ft_baseline_control_best / _last  (innov1 control, lr=1e-4)"
+log "  results/ft_reliability_fixed_best / _last (innov1 reliability, lr=1e-4)"
+log "  results/innovation3_consistency_best / _last"

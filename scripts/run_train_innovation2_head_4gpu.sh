@@ -11,9 +11,9 @@ set -euo pipefail
 #   qfl_radar      - QFL + radar-prior objectness reweighting (full innovation 2)
 #
 # By default this trains from scratch with the high-score baseline form so the
-# result is directly comparable to paper_metrics_legacy_highscore_best. To
+# result is directly comparable to results/legacy_highscore_best. To
 # instead fine-tune from the baseline weights, set:
-#   ASY_MODEL_PATH=logs_legacy_highscore_phi_l_5frames_bs64_300e_320/best_epoch_weights.pth
+#   ASY_MODEL_PATH=weights/baseline_best.pth
 #   ASY_INIT_LR=0.001 ASY_UNFREEZE_EPOCH=60
 
 cd "$(dirname "$0")/.."

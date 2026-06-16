@@ -43,16 +43,16 @@ COMMON=(--val_txt 2007_val.txt --model_path "${CKPT}" --fusion_mode baseline
 # 1) single-scale 320 (paper protocol)
 log "EVAL 1/2: single-scale 320"
 CUDA_VISIBLE_DEVICES=${EVAL_GPU} "${PYTHON}" eval_paper_metrics.py "${COMMON[@]}" \
-    --out_dir paper_metrics_innov3_multiscale_320 2>&1 | tail -20
+    --out_dir results/innov3_multiscale_320 2>&1 | tail -20
 
 # 2) radar multi-scale TTA (NMS merge keeps localization)
 log "EVAL 2/2: radar multi-scale TTA (320/384/448, NMS merge)"
 CUDA_VISIBLE_DEVICES=${EVAL_GPU} "${PYTHON}" eval_paper_metrics.py "${COMMON[@]}" \
     --tta --tta_scales 320,384,448 --tta_fusion nms --tta_radar_alpha 0.0 \
-    --out_dir paper_metrics_innov3_multiscale_tta 2>&1 | tail -20
+    --out_dir results/innov3_multiscale_tta 2>&1 | tail -20
 
 log "=== RESULTS (baseline 42.570 | innov2 49.958) ==="
-for d in paper_metrics_innov3_multiscale_320 paper_metrics_innov3_multiscale_tta; do
+for d in results/innov3_multiscale_320 results/innov3_multiscale_tta; do
     if [[ -f "${d}/paper_metrics.json" ]]; then
         v=$(${PYTHON} -c "import json;print(round(json.load(open('${d}/paper_metrics.json'))['mAP50-95'],3))" 2>/dev/null)
         log "  ${d}: mAP50-95 = ${v}"

@@ -25,7 +25,7 @@ EXP_NAME=multiscale_ft_full_phi_l_5frames_bs48_e50_320
 MASTER_PORT=29581
 
 # --- init from innov2 best (the strongest single-scale model) ---
-export ASY_MODEL_PATH=${WORK_DIR}/logs_innovation2_qfl_radar_phi_l_5frames_bs64_300e_320/best_epoch_weights.pth
+export ASY_MODEL_PATH=${WORK_DIR}/weights/innov1_qfl_radar_best.pth
 
 # --- innov2 head settings (QFL + radar prior), unchanged ---
 export ASY_QFL=1
@@ -113,7 +113,7 @@ log "EVAL multiscale-ft best at single-scale 320 (paper protocol)"
     --task_loss sum \
     --dark_times night --dim_lightings dim --dim_times daytime,night \
     --dim_weathers overcast,rainy --small_area 4096 --small_area_space original \
-    --out_dir paper_metrics_multiscale_ft_full_best 2>&1 | tail -15
+    --out_dir results/multiscale_ft_full_best 2>&1 | tail -15
 
 echo "DONE" > "${WORK_DIR}/logs/a100_multiscale_ft_full_COMPLETE.flag"
 log "ALL DONE. innov2 single-scale=49.958 | soup(old 9e)=50.114"

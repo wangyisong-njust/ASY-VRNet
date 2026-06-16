@@ -22,7 +22,7 @@ EXP_NAME=innov3_weather_aug_ft_phi_l_5frames_bs64_e60_320
 MASTER_PORT=29572
 
 # --- init from innov2 best ---
-export ASY_MODEL_PATH=${WORK_DIR}/logs_innovation2_qfl_radar_phi_l_5frames_bs64_300e_320/best_epoch_weights.pth
+export ASY_MODEL_PATH=${WORK_DIR}/weights/innov1_qfl_radar_best.pth
 
 # --- keep innov2 architecture (baseline fusion, QFL + radar prior) ---
 export ASY_FUSION_MODE=baseline
@@ -97,7 +97,7 @@ if [[ "${train_exit}" -ne 0 ]]; then
 fi
 
 sleep 20
-for entry in "best:paper_metrics_innov3_weather_aug_best" "last:paper_metrics_innov3_weather_aug_last"; do
+for entry in "best:results/innov3_weather_aug_best" "last:results/innov3_weather_aug_last"; do
     tag="${entry%%:*}"; out="${entry##*:}"
     ckpt="${ASY_SAVE_DIR}/${tag}_epoch_weights.pth"
     [[ -f "${ckpt}" ]] || { log "SKIP ${ckpt} (missing)"; continue; }

@@ -11,10 +11,10 @@ gracefully than the baseline as radar is removed.
 Example (baseline vs innovation-3, same plot):
 
     python scripts/plot_radar_robustness_curve.py \
-        --models "baseline=logs_legacy_highscore_phi_l_5frames_bs64_300e_320/best_epoch_weights.pth=baseline" \
+        --models "baseline=weights/baseline_best.pth=baseline" \
                  "innov3=logs_innovation3_consistency_phi_l_5frames_bs64_300e_320/best_epoch_weights.pth=baseline" \
         --ratios 0 0.25 0.5 0.75 1.0 \
-        --out_root paper_metrics_robustness
+        --out_root results/robustness
 """
 import argparse
 import json
@@ -55,7 +55,7 @@ def parse_args():
         help="One or more 'label=model_path=fusion_mode' entries (fusion_mode optional, default baseline).",
     )
     p.add_argument("--ratios", nargs="+", type=float, default=[0.0, 0.25, 0.5, 0.75, 1.0])
-    p.add_argument("--out_root", default="paper_metrics_robustness")
+    p.add_argument("--out_root", default="results/robustness")
     p.add_argument("--python", default=sys.executable)
     p.add_argument("--metric", default="mAP50-95", help="Metric to plot on the y-axis.")
     p.add_argument("--skip_existing", action="store_true",

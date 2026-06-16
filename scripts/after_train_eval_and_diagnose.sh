@@ -154,8 +154,8 @@ main() {
 
         BEST_WEIGHT="${DET_DIR}/best_epoch_weights.pth"
         LAST_WEIGHT="${DET_DIR}/last_epoch_weights.pth"
-        BEST_OUT=${BEST_OUT:-paper_metrics_bs128_best_final}
-        LAST_OUT=${LAST_OUT:-paper_metrics_bs128_last_final}
+        BEST_OUT=${BEST_OUT:-results/bs128_best_final}
+        LAST_OUT=${LAST_OUT:-results/bs128_last_final}
 
         run_eval best "${BEST_WEIGHT}" "${BEST_OUT}"
         run_eval last "${LAST_WEIGHT}" "${LAST_OUT}"

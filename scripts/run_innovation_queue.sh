@@ -47,7 +47,7 @@ run_eval() {
     sleep 10
 }
 
-BASE_WEIGHTS=logs_legacy_highscore_phi_l_5frames_bs64_300e_320/best_epoch_weights.pth
+BASE_WEIGHTS=weights/baseline_best.pth
 
 # ===========================================================================#
 # 0.5 Evaluate innovation 2 (just finished training when WAIT_PID died).
@@ -55,8 +55,8 @@ BASE_WEIGHTS=logs_legacy_highscore_phi_l_5frames_bs64_300e_320/best_epoch_weight
 run_eval "innov2 qfl_radar" \
     env EXP_NAME=innovation2_qfl_radar_phi_l_5frames_bs64_300e_320 \
         FUSION_MODE=baseline \
-        BEST_OUT=paper_metrics_innovation2_qfl_radar_best \
-        LAST_OUT=paper_metrics_innovation2_qfl_radar_last \
+        BEST_OUT=results/innovation2_qfl_radar_best \
+        LAST_OUT=results/innovation2_qfl_radar_last \
         bash scripts/after_train_eval_and_diagnose.sh
 
 # ===========================================================================#
@@ -68,8 +68,8 @@ run_train "innov1 baseline_control finetune" \
 run_eval "innov1 baseline_control" \
     env EXP_NAME=ft_baseline_control_from_highscore_e60_lr1e3 \
         FUSION_MODE=baseline \
-        BEST_OUT=paper_metrics_ft_baseline_control_best \
-        LAST_OUT=paper_metrics_ft_baseline_control_last \
+        BEST_OUT=results/ft_baseline_control_best \
+        LAST_OUT=results/ft_baseline_control_last \
         bash scripts/after_train_eval_and_diagnose.sh
 
 # ===========================================================================#
@@ -81,8 +81,8 @@ run_train "innov1 reliability_fixed finetune" \
 run_eval "innov1 reliability_fixed" \
     env EXP_NAME=ft_reliability_fixed_from_highscore_e60_lr1e3 \
         FUSION_MODE=reliability \
-        BEST_OUT=paper_metrics_ft_reliability_fixed_best \
-        LAST_OUT=paper_metrics_ft_reliability_fixed_last \
+        BEST_OUT=results/ft_reliability_fixed_best \
+        LAST_OUT=results/ft_reliability_fixed_last \
         bash scripts/after_train_eval_and_diagnose.sh
 
 # ===========================================================================#
@@ -94,11 +94,11 @@ run_train "innov3 consistency 300e" \
 run_eval "innov3 consistency" \
     env EXP_NAME=innovation3_consistency_phi_l_5frames_bs64_300e_320 \
         FUSION_MODE=baseline \
-        BEST_OUT=paper_metrics_innovation3_consistency_best \
-        LAST_OUT=paper_metrics_innovation3_consistency_last \
+        BEST_OUT=results/innovation3_consistency_best \
+        LAST_OUT=results/innovation3_consistency_last \
         bash scripts/after_train_eval_and_diagnose.sh
 
 log "QUEUE COMPLETE. Results:"
-log "  paper_metrics_ft_baseline_control_best / _last"
-log "  paper_metrics_ft_reliability_fixed_best / _last"
-log "  paper_metrics_innovation3_consistency_best / _last"
+log "  results/ft_baseline_control_best / _last"
+log "  results/ft_reliability_fixed_best / _last"
+log "  results/innovation3_consistency_best / _last"

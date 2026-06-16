@@ -27,12 +27,13 @@ downloads/
 # ---- pretrained backbone (publicly downloadable, see docs/reproduction.md) ----
 model_data/**/*.pth.tar
 
-# ---- model weights (not shipped; regenerate via scripts/greedy_soup.py) ----
+# ---- model weights: kept locally under weights/, not shipped (regenerate
+#      via scripts/greedy_soup.py or fetch separately; see docs/reproduction.md) ----
 *.pth
+weights/
 
 # ---- intermediate training / evaluation outputs (not shipped) ----
 logs/
-logs_seg/
 logs_*/
 logs_seg_*/
 reproduction_reports/
@@ -40,7 +41,9 @@ results_archives/
 predict_output/
 predict_output_seg/
 
-# ---- keep only the compact final metric summaries under paper_metrics_*/ ----
-paper_metrics_*/*
-!paper_metrics_*/paper_metrics.json
-!paper_metrics_*/paper_metrics.csv
+# ---- results/: keep only the compact final metric summaries ----
+results/**/*
+!results/
+!results/**/
+!results/**/paper_metrics.json
+!results/**/paper_metrics.csv

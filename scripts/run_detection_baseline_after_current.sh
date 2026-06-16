@@ -72,8 +72,8 @@ main() {
     PHI="${ASY_PHI}" \
     CONFIDENCE="${CONFIDENCE:-0.001}" \
     MAX_BOXES="${MAX_BOXES:-100}" \
-    BEST_OUT="${BEST_OUT:-paper_metrics_detection_baseline_best}" \
-    LAST_OUT="${LAST_OUT:-paper_metrics_detection_baseline_last}" \
+    BEST_OUT="${BEST_OUT:-results/detection_baseline_best}" \
+    LAST_OUT="${LAST_OUT:-results/detection_baseline_last}" \
         bash scripts/after_train_eval_detection_baseline.sh >> "${EVAL_STDOUT}" 2>&1 &
     EVAL_PID=$!
     printf '%s\n' "${EVAL_PID}" > "${LOG_DIR}/${EXP_NAME}_after_eval.pid"

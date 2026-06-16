@@ -67,15 +67,15 @@ EXP_NAME=innovation1_density_gate_phi_l_5frames_bs64_300e_320 \
     FUSION_MODE=reliability \
     RADAR_LEGACY_PREPROCESS=1 \
     RADAR_PRESERVE_POINTS=0 \
-    BEST_OUT=paper_metrics_innovation1_density_gate_best \
-    LAST_OUT=paper_metrics_innovation1_density_gate_last \
+    BEST_OUT=results/innovation1_density_gate_best \
+    LAST_OUT=results/innovation1_density_gate_last \
     bash scripts/after_train_eval_and_diagnose.sh
 eval_exit=$?
 log "EVAL DONE (exit=${eval_exit}): innov1 density gate"
 
 log "GATE_QUEUE COMPLETE."
-log "  Results: paper_metrics_innovation1_density_gate_best / _last"
+log "  Results: results/innovation1_density_gate_best / _last"
 log "  Compare mAP50-95 against:"
-log "    baseline:          42.570  (paper_metrics_legacy_highscore_best)"
-log "    innov1 ft-60e v1:  42.714  (paper_metrics_ft_reliability_fixed_best)"
-log "    innov2 qfl_radar:  49.958  (paper_metrics_innovation2_qfl_radar_best)"
+log "    baseline:          42.570  (results/legacy_highscore_best)"
+log "    innov1 ft-60e v1:  42.714  (results/ft_reliability_fixed_best)"
+log "    innov2 qfl_radar:  49.958  (results/innovation2_qfl_radar_best)"

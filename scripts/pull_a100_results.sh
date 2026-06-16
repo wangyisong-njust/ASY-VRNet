@@ -38,7 +38,7 @@ while true; do
 done
 
 # Pull evaluation results
-for dir in paper_metrics_innovation1_density_gate_best paper_metrics_innovation1_density_gate_last; do
+for dir in results/innovation1_density_gate_best results/innovation1_density_gate_last; do
     log "Pulling ${dir}..."
     rsync -az -e "ssh -o StrictHostKeyChecking=no" \
         "${A100}:${REMOTE_BASE}/${dir}/" \
@@ -55,13 +55,13 @@ rsync -az -e "ssh -o StrictHostKeyChecking=no" \
 
 # Print results
 log "=== PULL COMPLETE ==="
-if [[ -f "${LOCAL_BASE}/paper_metrics_innovation1_density_gate_best/paper_metrics.json" ]]; then
+if [[ -f "${LOCAL_BASE}/results/innovation1_density_gate_best/paper_metrics.json" ]]; then
     log "Best checkpoint mAP50-95:"
     python3 -c "
 import json
-d = json.load(open('${LOCAL_BASE}/paper_metrics_innovation1_density_gate_best/paper_metrics.json'))
+d = json.load(open('${LOCAL_BASE}/results/innovation1_density_gate_best/paper_metrics.json'))
 print(f'  mAP50-95: {d.get(\"mAP50-95\", d.get(\"mAP_50_95\", \"N/A\"))}')
 print(f'  mAP50:    {d.get(\"mAP50\", d.get(\"mAP_50\", \"N/A\"))}')
-" 2>/dev/null || cat "${LOCAL_BASE}/paper_metrics_innovation1_density_gate_best/paper_metrics.json"
+" 2>/dev/null || cat "${LOCAL_BASE}/results/innovation1_density_gate_best/paper_metrics.json"
 fi
 log "  Baseline: 42.570  |  Innov1 ft-60e: 42.714  |  Innov2: 49.958"

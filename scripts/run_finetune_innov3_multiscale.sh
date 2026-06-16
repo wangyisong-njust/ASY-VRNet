@@ -24,7 +24,7 @@ MASTER_PORT=${MASTER_PORT:-29555}
 NPROC=${NPROC:-3}
 
 # --- start from the innov2 best checkpoint (the current strongest model) ---
-export ASY_MODEL_PATH=${ASY_MODEL_PATH:-${PROJECT_ROOT}/logs_innovation2_qfl_radar_phi_l_5frames_bs64_300e_320/best_epoch_weights.pth}
+export ASY_MODEL_PATH=${ASY_MODEL_PATH:-${PROJECT_ROOT}/weights/innov1_qfl_radar_best.pth}
 
 # --- innov2 head settings (QFL + radar prior), unchanged ---
 export ASY_QFL=1

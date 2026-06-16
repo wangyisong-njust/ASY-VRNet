@@ -27,7 +27,7 @@ EXP_NAME=innov3_gate_on_innov2_ft_phi_l_5frames_bs64_e60_320
 MASTER_PORT=29563
 
 # --- start from innov2 best (QFL + radar prior, fusion=baseline weights) ---
-export ASY_MODEL_PATH=${WORK_DIR}/logs_innovation2_qfl_radar_phi_l_5frames_bs64_300e_320/best_epoch_weights.pth
+export ASY_MODEL_PATH=${WORK_DIR}/weights/innov1_qfl_radar_best.pth
 
 # --- add the reliability gate (plain, NO density: density variant failed) ---
 export ASY_FUSION_MODE=reliability
@@ -107,7 +107,7 @@ if [[ "${train_exit}" -ne 0 ]]; then
 fi
 
 sleep 20
-for entry in "best:paper_metrics_innov3_gate_on_innov2_best" "last:paper_metrics_innov3_gate_on_innov2_last"; do
+for entry in "best:results/innov3_gate_on_innov2_best" "last:results/innov3_gate_on_innov2_last"; do
     tag="${entry%%:*}"; out="${entry##*:}"
     ckpt="${ASY_SAVE_DIR}/${tag}_epoch_weights.pth"
     [[ -f "${ckpt}" ]] || { log "SKIP ${ckpt} (missing)"; continue; }

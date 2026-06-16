@@ -8,7 +8,7 @@ set -euo pipefail
 # when radar is unreliable/missing. Training-time only; inference is unchanged.
 #
 # Built on the reproduced high-score BASELINE fusion + loss form so the result
-# is directly comparable to paper_metrics_legacy_highscore_best.
+# is directly comparable to results/legacy_highscore_best.
 #
 # Key env (all read by utils/utils_fit.py):
 #   ASY_CONSISTENCY=1                 enable

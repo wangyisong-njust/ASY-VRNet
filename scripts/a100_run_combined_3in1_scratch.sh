@@ -103,7 +103,7 @@ ASY_GATE_DENSITY=0 "${PYTHON}" eval_paper_metrics.py \
     --task_loss sum \
     --dark_times night --dim_lightings dim --dim_times daytime,night \
     --dim_weathers overcast,rainy --small_area 4096 --small_area_space original \
-    --out_dir paper_metrics_combined_3in1_best 2>&1 | tail -15
+    --out_dir results/combined_3in1_best 2>&1 | tail -15
 
 echo "DONE" > "${WORK_DIR}/logs/a100_combined_3in1_COMPLETE.flag"
 log "ALL DONE. baseline 42.570 | innov2 49.958"

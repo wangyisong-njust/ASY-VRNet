@@ -9,15 +9,15 @@ the full val set separately.
 
 Usage:
   python3 scripts/greedy_soup.py \
-      --out logs_innov2_soup/greedy_soup.pth \
+      --out weights/final_greedy_soup.pth \
       --val_txt 2007_val_subset400.txt \
       --python ~/anaconda3/envs/PDPP/bin/python \
       --gpu 0 \
       --candidates \
-        logs_multiscale_ft_full_phi_l_5frames_bs48_e50_320/best_epoch_weights.pth \
-        logs_innovation2_qfl_radar_phi_l_5frames_bs64_300e_320/best_epoch_weights.pth \
-        logs_innovation2_qfl_radar_phi_l_5frames_bs64_300e_320/ep160-*.pth \
-        ...
+        weights/multiscale_ft_best.pth \
+        weights/innov1_qfl_radar_best.pth \
+        weights/innov1_qfl_radar_ep160.pth \
+        weights/innov1_qfl_radar_ep140.pth weights/innov1_qfl_radar_ep180.pth weights/innov1_qfl_radar_ep200.pth
 """
 from __future__ import annotations
 

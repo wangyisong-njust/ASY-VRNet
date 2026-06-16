@@ -25,8 +25,8 @@ export DIM_TIMES=${DIM_TIMES:-daytime,night}
 export DIM_WEATHERS=${DIM_WEATHERS:-overcast,rainy}
 export SMALL_AREA=${SMALL_AREA:-4096}
 export SMALL_AREA_SPACE=${SMALL_AREA_SPACE:-original}
-export BEST_OUT=${BEST_OUT:-paper_metrics_${EXP_NAME}_best}
-export LAST_OUT=${LAST_OUT:-paper_metrics_${EXP_NAME}_last}
+export BEST_OUT=${BEST_OUT:-results/${EXP_NAME}_best}
+export LAST_OUT=${LAST_OUT:-results/${EXP_NAME}_last}
 
 case "${INNOVATION_VARIANT}" in
     i1_reliability)

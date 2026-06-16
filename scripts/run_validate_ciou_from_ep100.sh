@@ -25,10 +25,13 @@ EXP_NAME=validate_ciou_from_ep100_e${EPOCHS}
 MASTER_PORT=29577
 NPROC=${NPROC:-3}
 
-INNOV2_EP100=${PROJECT_ROOT}/logs_innovation2_qfl_radar_phi_l_5frames_bs64_300e_320/ep100-loss1.789-det_val_loss1.480-seg_val_loss0.308.pth
-[[ -f "${INNOV2_EP100}" ]] || { echo "ERROR: ep100 checkpoint not found"; exit 1; }
+# Init from the quality-aligned model. The original experiment started from the
+# ep100 checkpoint; the shipped weights/ keep only best + ep140/160/180/200, so
+# point INNOV2_INIT at one of those (override with INNOV2_INIT=... if you have ep100).
+INNOV2_INIT=${INNOV2_INIT:-${PROJECT_ROOT}/weights/innov1_qfl_radar_best.pth}
+[[ -f "${INNOV2_INIT}" ]] || { echo "ERROR: init checkpoint not found: ${INNOV2_INIT}"; exit 1; }
 
-export ASY_MODEL_PATH=${INNOV2_EP100}
+export ASY_MODEL_PATH=${INNOV2_INIT}
 export ASY_QFL=1
 export ASY_RADAR_PRIOR=1
 export ASY_RADAR_PRIOR_WEIGHT=0.5
@@ -112,13 +115,13 @@ ASY_IOU_LOSS_TYPE=ciou CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} \
     --task_loss sum \
     --dark_times night --dim_lightings dim --dim_times daytime,night \
     --dim_weathers overcast,rainy --small_area 4096 --small_area_space original \
-    --out_dir paper_metrics_${EXP_NAME} 2>&1 | tail -20
+    --out_dir results/${EXP_NAME} 2>&1 | tail -20
 
 echo ""
 echo "=== RESULT (innov2 ep160-best=49.958 | ep100 start point) ==="
 "${PYTHON}" -c "
 import json, os
-f = 'paper_metrics_${EXP_NAME}/paper_metrics.json'
+f = 'results/${EXP_NAME}/paper_metrics.json'
 if os.path.exists(f):
     d = json.load(open(f))
     print(f'  mAP50-95 : {d[\"mAP50-95\"]:.3f}')

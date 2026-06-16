@@ -16,7 +16,7 @@ EXP_NAME=validate_ciou_ft_innov2_e20
 MASTER_PORT=29576
 NPROC=${NPROC:-3}
 
-export ASY_MODEL_PATH=${PROJECT_ROOT}/logs_innovation2_qfl_radar_phi_l_5frames_bs64_300e_320/best_epoch_weights.pth
+export ASY_MODEL_PATH=${PROJECT_ROOT}/weights/innov1_qfl_radar_best.pth
 export ASY_QFL=1
 export ASY_RADAR_PRIOR=1
 export ASY_RADAR_PRIOR_WEIGHT=0.5
@@ -97,13 +97,13 @@ ASY_IOU_LOSS_TYPE=ciou CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} \
     --task_loss sum \
     --dark_times night --dim_lightings dim --dim_times daytime,night \
     --dim_weathers overcast,rainy --small_area 4096 --small_area_space original \
-    --out_dir paper_metrics_validate_ciou_best 2>&1 | tail -20
+    --out_dir results/validate_ciou_best 2>&1 | tail -20
 
 echo ""
 echo "=== RESULT (innov2 baseline: 49.958) ==="
 "${PYTHON}" -c "
 import json, os
-f = 'paper_metrics_validate_ciou_best/paper_metrics.json'
+f = 'results/validate_ciou_best/paper_metrics.json'
 if os.path.exists(f):
     d = json.load(open(f))
     print(f'  mAP50-95 : {d[\"mAP50-95\"]:.3f}')

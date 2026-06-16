@@ -245,7 +245,7 @@ def main():
     FIG.mkdir(parents=True, exist_ok=True)
     SAMPLES.mkdir(parents=True, exist_ok=True)
 
-    metrics_root = ROOT / "paper_metrics_bs128_last_final"
+    metrics_root = ROOT / "results/bs128_last_final"
     metrics = load_json(metrics_root / "paper_metrics.json")
 
     save_bar_chart(

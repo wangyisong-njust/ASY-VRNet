@@ -6,7 +6,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 PYTHON=${PYTHON:-${HOME}/anaconda3/envs/PDPP/bin/python}
-CKPT=logs_innovation2_qfl_radar_phi_l_5frames_bs64_300e_320/best_epoch_weights.pth
+CKPT=weights/innov1_qfl_radar_best.pth
 GPU=${EVAL_GPU:-0}
 
 [[ -f "${CKPT}" ]] || { echo "ERROR: checkpoint not found: ${CKPT}"; exit 1; }
@@ -22,7 +22,7 @@ CUDA_VISIBLE_DEVICES=${GPU} "${PYTHON}" eval_paper_metrics.py \
     --tta --tta_scales 320 --tta_flip --tta_fusion nms --tta_radar_alpha 0.0 \
     --dark_times night --dim_lightings dim --dim_times daytime,night \
     --dim_weathers overcast,rainy --small_area 4096 --small_area_space original \
-    --out_dir paper_metrics_innov2_flip_tta 2>&1 | tail -20
+    --out_dir results/innov2_flip_tta 2>&1 | tail -20
 
 echo ""
 echo "[384-eval] single-scale 384 (no flip, no TTA)"
@@ -35,11 +35,11 @@ CUDA_VISIBLE_DEVICES=${GPU} "${PYTHON}" eval_paper_metrics.py \
     --task_loss sum \
     --dark_times night --dim_lightings dim --dim_times daytime,night \
     --dim_weathers overcast,rainy --small_area 4096 --small_area_space original \
-    --out_dir paper_metrics_innov2_384eval 2>&1 | tail -20
+    --out_dir results/innov2_384eval 2>&1 | tail -20
 
 echo ""
 echo "=== SUMMARY (baseline 42.570 | innov2-320 49.958) ==="
-for d in paper_metrics_innov2_flip_tta paper_metrics_innov2_384eval; do
+for d in results/innov2_flip_tta results/innov2_384eval; do
     if [[ -f "${d}/paper_metrics.json" ]]; then
         v=$(${PYTHON} -c "import json; d=json.load(open('${d}/paper_metrics.json')); print(round(d['mAP50-95'],3))" 2>/dev/null)
         echo "  ${d}: mAP50-95 = ${v}"

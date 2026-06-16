@@ -34,7 +34,7 @@ if [[ -z "${PYTHON}" ]]; then
 fi
 
 FT_MODE=${FT_MODE:-reliability_fixed}
-BASELINE_WEIGHTS=${BASELINE_WEIGHTS:-${PROJECT_ROOT}/logs_legacy_highscore_phi_l_5frames_bs64_300e_320/best_epoch_weights.pth}
+BASELINE_WEIGHTS=${BASELINE_WEIGHTS:-${PROJECT_ROOT}/weights/baseline_best.pth}
 
 if [[ ! -f "${BASELINE_WEIGHTS}" ]]; then
     echo "Baseline weights not found: ${BASELINE_WEIGHTS}"
