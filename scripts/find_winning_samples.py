@@ -134,6 +134,10 @@ def main():
     ap.add_argument("--images_dir", default="dataset/VOCdevkit/VOC2007/JPEGImages")
     ap.add_argument("--val_txt", default="2007_val.txt")
     ap.add_argument("--scan", type=int, default=600, help="how many val images to scan")
+    ap.add_argument("--filter", default="none", choices=["none", "night", "small", "dim"],
+                    help="restrict candidates to a hard subset")
+    ap.add_argument("--info_csv", default="dataset/WaterScenes_Full/information_list.csv")
+    ap.add_argument("--small_area", type=float, default=4096.0)
     ap.add_argument("--topk", type=int, default=10)
     ap.add_argument("--confidence", type=float, default=0.3)
     ap.add_argument("--nms_iou", type=float, default=0.5)
@@ -150,6 +154,29 @@ def main():
 
     gt = parse_gt(ROOT / args.val_txt)
     ids = list(gt.keys())
+
+    # ---- optional hard-subset filter ----
+    if args.filter in ("night", "dim"):
+        import csv as _csv
+        keep = set()
+        csv_path = ROOT / args.info_csv
+        if not csv_path.exists():
+            raise SystemExit(f"info csv not found: {csv_path}")
+        with open(csv_path, encoding="utf-8") as f:
+            for row in _csv.DictReader(f):
+                if args.filter == "night" and (row.get("time") or "").strip().lower() == "night":
+                    keep.add(row.get("id", ""))
+                elif args.filter == "dim" and (row.get("lighting") or "").strip().lower() == "dim" \
+                        and (row.get("weather") or "").strip().lower() in ("overcast", "rainy"):
+                    keep.add(row.get("id", ""))
+        ids = [i for i in ids if i in keep]
+        print(f"[win] filter={args.filter}: {len(ids)} candidate images")
+    elif args.filter == "small":
+        def has_small(boxes):
+            return any((b[2] - b[0]) * (b[3] - b[1]) <= args.small_area for b in boxes)
+        ids = [i for i in ids if has_small(gt[i])]
+        print(f"[win] filter=small (GT area<= {args.small_area}): {len(ids)} candidate images")
+
     import random
     random.Random(args.seed).shuffle(ids)
     ids = ids[:args.scan]
