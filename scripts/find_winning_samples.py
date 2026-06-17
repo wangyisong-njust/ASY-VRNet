@@ -101,14 +101,15 @@ def matched_gt(gt_boxes, dets, iou_thr=0.5):
     return hit
 
 
-def draw_gt(img, gt_boxes, missed_idx, color_hit=(0, 220, 0), color_miss=(255, 215, 0)):
+def draw_boxes_only(img, dets, hl_boxes=None, w=3):
+    """Draw detection rectangles only (no text). hl_boxes (xyxy) drawn in lime."""
     d = ImageDraw.Draw(img)
-    for gi, g in enumerate(gt_boxes):
-        c = color_miss if gi in missed_idx else None
-        if c is None:
-            continue
-        for k in range(3):
-            d.rectangle([g[0] - k, g[1] - k, g[2] + k, g[3] + k], outline=c)
+    hl = hl_boxes or []
+    for det in dets:
+        x1, y1, x2, y2 = det[:4]
+        color = (50, 255, 50) if any(iou_xyxy(det[:4], h) >= 0.5 for h in hl) else (255, 40, 40)
+        for k in range(w):
+            d.rectangle([x1 - k, y1 - k, x2 + k, y2 + k], outline=color)
     return img
 
 
@@ -139,6 +140,9 @@ def main():
     ap.add_argument("--info_csv", default="dataset/WaterScenes_Full/information_list.csv")
     ap.add_argument("--small_area", type=float, default=4096.0)
     ap.add_argument("--topk", type=int, default=10)
+    ap.add_argument("--crop_to_diff", action="store_true", default=True,
+                    help="zoom both panels into the region ours detects but baseline misses")
+    ap.add_argument("--no_crop", action="store_false", dest="crop_to_diff")
     ap.add_argument("--confidence", type=float, default=0.3)
     ap.add_argument("--nms_iou", type=float, default=0.5)
     ap.add_argument("--seed", type=int, default=0)
@@ -207,14 +211,32 @@ def main():
     for rank, (score, win, loss, img_id, hb, hf) in enumerate(scored[:args.topk]):
         p = ROOT / args.images_dir / f"{img_id}.jpg"
         ng = len(gt[img_id])
-        # baseline panel: its preds + GT it MISSED (yellow)
-        base_panel = yb.detect_image(Image.open(p).convert("RGB"), img_id)
-        base_panel = draw_gt(base_panel, gt[img_id], set(range(ng)) - hb)
-        base_panel = label_bar(base_panel, f"Baseline  hit {len(hb)}/{ng} GT")
-        # ours panel
-        final_panel = yf.detect_image(Image.open(p).convert("RGB"), img_id)
-        final_panel = draw_gt(final_panel, gt[img_id], set(range(ng)) - hf)
-        final_panel = label_bar(final_panel, f"Ours  hit {len(hf)}/{ng} GT  (+{win})")
+        W, H = Image.open(p).size
+
+        # Region of interest = the GT objects ours catches but baseline misses.
+        diff = [gt[img_id][gi] for gi in (hf - hb)]
+        if args.crop_to_diff and diff:
+            x1 = min(b[0] for b in diff); y1 = min(b[1] for b in diff)
+            x2 = max(b[2] for b in diff); y2 = max(b[3] for b in diff)
+            mw = max(40, (x2 - x1) * 0.8); mh = max(40, (y2 - y1) * 0.8)
+            crop = (max(0, int(x1 - mw)), max(0, int(y1 - mh)),
+                    min(W, int(x2 + mw)), min(H, int(y2 + mh)))
+        else:
+            crop = (0, 0, W, H)
+
+        # Boxes only (no text). On ours, highlight in green the GT objects it
+        # recovers that baseline missed; everything else red.
+        db = predict_boxes(yb, Image.open(p).convert("RGB"), img_id)
+        df = predict_boxes(yf, Image.open(p).convert("RGB"), img_id)
+        base_panel = draw_boxes_only(Image.open(p).convert("RGB"), db).crop(crop)
+        final_panel = draw_boxes_only(Image.open(p).convert("RGB"), df, hl_boxes=diff).crop(crop)
+        # upscale small crops so the difference is visible
+        if base_panel.width < 520:
+            s = 520 / base_panel.width
+            sz = (int(base_panel.width * s), int(base_panel.height * s))
+            base_panel = base_panel.resize(sz); final_panel = final_panel.resize(sz)
+        base_panel = label_bar(base_panel, f"Baseline  detect {len(hb)}/{ng}")
+        final_panel = label_bar(final_panel, f"Ours  detect {len(hf)}/{ng}  (green = recovered)")
         h = max(base_panel.height, final_panel.height)
         combo = Image.new("RGB", (base_panel.width + final_panel.width + 8, h), (255, 255, 255))
         combo.paste(base_panel, (0, 0))
@@ -223,7 +245,7 @@ def main():
         combo.save(out, quality=92)
         print(f"  [saved] {out.name}  (baseline {len(hb)}/{ng}, ours {len(hf)}/{ng})")
 
-    print(f"[win] done -> {out_dir}  (yellow boxes = GT objects that model missed)")
+    print(f"[win] done -> {out_dir}  (cropped to the region ours detects but baseline misses)")
 
 
 if __name__ == "__main__":
