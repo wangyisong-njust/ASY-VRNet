@@ -1,0 +1,10 @@
+image_id,status,baseline_tp,ours_tp,gt_count,delta,baseline_boxes,ours_boxes,output
+01702,ok,6,13,18,7,15,15,outputs/batch_recommended_9_512_titles_fixed/best_cases/compare_01702_b6_o13_gt18.jpg
+02698,ok,11,15,18,4,16,16,outputs/batch_recommended_9_512_titles_fixed/best_cases/compare_02698_b11_o15_gt18.jpg
+02757,ok,10,14,18,4,16,15,outputs/batch_recommended_9_512_titles_fixed/best_cases/compare_02757_b10_o14_gt18.jpg
+19781,ok,1,7,16,6,8,8,outputs/batch_recommended_9_512_titles_fixed/best_cases/compare_19781_b1_o7_gt16.jpg
+32712,ok,7,12,14,5,12,14,outputs/batch_recommended_9_512_titles_fixed/best_cases/compare_32712_b7_o12_gt14.jpg
+34307,ok,9,14,14,5,17,15,outputs/batch_recommended_9_512_titles_fixed/best_cases/compare_34307_b9_o14_gt14.jpg
+35101,ok,9,14,16,5,13,15,outputs/batch_recommended_9_512_titles_fixed/best_cases/compare_35101_b9_o14_gt16.jpg
+35503,ok,4,10,20,6,8,10,outputs/batch_recommended_9_512_titles_fixed/best_cases/compare_35503_b4_o10_gt20.jpg
+49445,ok,3,9,17,6,7,10,outputs/batch_recommended_9_512_titles_fixed/best_cases/compare_49445_b3_o9_gt17.jpg

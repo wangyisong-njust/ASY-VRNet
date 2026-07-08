@@ -14,6 +14,7 @@ env/
 paper_metrics_out/
 img_crop/
 img_out/
+outputs/
 *.log
 logs/*.pid
 logs/*.out
@@ -27,10 +28,10 @@ downloads/
 # ---- pretrained backbone (publicly downloadable, see docs/reproduction.md) ----
 model_data/**/*.pth.tar
 
-# ---- model weights: kept locally under weights/, not shipped (regenerate
-#      via scripts/greedy_soup.py or fetch separately; see docs/reproduction.md) ----
-*.pth
-weights/
+# ---- model weights ----
+# Final delivery checkpoints are tracked with Git LFS.
+!weights/
+!weights/*.pth
 
 # ---- intermediate training / evaluation outputs (not shipped) ----
 logs/
