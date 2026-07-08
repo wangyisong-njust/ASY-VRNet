@@ -46,17 +46,6 @@ Local folder:
 
 `presentation/comparison_baseline_vs_ours_selected_512`
 
-For a clearer teacher-facing visualization, use the cropped recovered-object
-figures in:
-
-`presentation/clear_visual_evidence_512`
-
-In those figures:
-
-- orange dashed boxes = GT objects missed by Baseline
-- green thick boxes = GT objects recovered by Ours
-- blue boxes = matched true-positive predictions
-
 Recommended ids:
 
 - `01702`: Baseline TP 6/18, Ours TP 13/18
@@ -69,6 +58,6 @@ Recommended ids:
 - `02698`: Baseline TP 11/18, Ours TP 15/18
 - `02757`: Baseline TP 10/18, Ours TP 14/18
 
-For paper or presentation use, prefer the clearer cropped evidence figures.
-The strongest visual examples are `01702`, `35503`, `49445`, `19781`, `34307`,
-and `35101`.
+For paper or presentation use, select the clearest 4-6 from this folder after
+visual review. The strongest visual examples are `01702`, `35503`, `49445`,
+`19781`, `34307`, and `35101`.
