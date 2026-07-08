@@ -42,7 +42,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gt-xml", default="", help="Optional VOC/WaterScenes detection XML for a GT panel.")
     parser.add_argument("--classes-path", default="model_data/waterscenes.txt")
     parser.add_argument("--input-shape", type=parse_shape, default=[320, 320])
-    parser.add_argument("--confidence", type=float, default=0.3)
+    parser.add_argument("--confidence", type=float, default=0.2)
     parser.add_argument("--nms-iou", type=float, default=0.5)
     parser.add_argument("--phi", default="l")
     parser.add_argument("--radar-legacy-preprocess", action="store_true")

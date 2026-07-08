@@ -47,7 +47,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-dir", default="outputs/batch_gt_compare")
     parser.add_argument("--classes-path", default="model_data/waterscenes.txt")
     parser.add_argument("--input-shape", type=parse_shape, default=[512, 512])
-    parser.add_argument("--confidence", type=float, default=0.3)
+    parser.add_argument("--confidence", type=float, default=0.2)
     parser.add_argument("--nms-iou", type=float, default=0.5)
     parser.add_argument("--match-iou", type=float, default=0.5)
     parser.add_argument("--phi", default="l")

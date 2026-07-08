@@ -16,21 +16,33 @@
 
 ```bash
 --input-shape 512,512
---confidence 0.3
+--confidence 0.2
 --radar-legacy-preprocess
 --no-radar-preserve-points
 --radar-source-order range,doppler,elevation,power
 --radar-target-order range,doppler,elevation,power
 ```
 
-## 100-Case Result
+The lower visualization threshold is used because the final QFL-style model is
+more conservative in confidence calibration. It improves recall without manual
+box editing and is applied uniformly across all compared images.
+
+## Validation 100-Case Result
 
 - Candidate type: validation split, adverse lighting/weather and small/dense
   targets.
 - Total valid cases: 100
-- Ours better: 65
-- Tied: 24
-- Ours worse: 11
+- Ours better: 77
+- Tied: 20
+- Ours worse: 3
+
+## Independent Test 100-Case Result
+
+- Candidate type: test split, adverse lighting/weather and small/dense targets.
+- Total valid cases: 100
+- Ours better: 76
+- Tied: 18
+- Ours worse: 6
 
 The `TP x/N` value means class-aware one-to-one matches with ground truth at
 IoU >= 0.5. It is not the number of drawn prediction boxes. Prediction count is
@@ -46,6 +58,21 @@ Local folder:
 
 `presentation/comparison_baseline_vs_ours_selected_512`
 
+For a clearer teacher-facing visualization, use the cropped recovered-object
+figures in:
+
+`presentation/clear_visual_evidence_512`
+
+Independent test-split examples are in:
+
+`presentation/clear_visual_evidence_test_512_conf020`
+
+In those figures:
+
+- orange dashed boxes = GT objects missed by Baseline
+- green thick boxes = GT objects recovered by Ours
+- blue boxes = matched true-positive predictions
+
 Recommended ids:
 
 - `01702`: Baseline TP 6/18, Ours TP 13/18
@@ -58,6 +85,6 @@ Recommended ids:
 - `02698`: Baseline TP 11/18, Ours TP 15/18
 - `02757`: Baseline TP 10/18, Ours TP 14/18
 
-For paper or presentation use, select the clearest 4-6 from this folder after
-visual review. The strongest visual examples are `01702`, `35503`, `49445`,
-`19781`, `34307`, and `35101`.
+For paper or presentation use, prefer the clearer cropped evidence figures.
+The strongest visual examples are `01702`, `35503`, `49445`, `19781`, `34307`,
+and `35101`.
