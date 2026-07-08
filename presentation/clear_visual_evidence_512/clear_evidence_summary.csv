@@ -1,0 +1,7 @@
+image_id,baseline_pred,baseline_tp,ours_pred,ours_tp,gt_count,recovered,output
+01702,15,6,15,13,18,7,presentation/clear_visual_evidence_512/clear_01702_b6_o13_gt18.jpg
+19781,8,1,8,7,16,6,presentation/clear_visual_evidence_512/clear_19781_b1_o7_gt16.jpg
+34307,17,9,15,14,14,5,presentation/clear_visual_evidence_512/clear_34307_b9_o14_gt14.jpg
+35101,13,9,15,14,16,5,presentation/clear_visual_evidence_512/clear_35101_b9_o14_gt16.jpg
+35503,8,4,10,10,20,6,presentation/clear_visual_evidence_512/clear_35503_b4_o10_gt20.jpg
+49445,7,3,10,9,17,6,presentation/clear_visual_evidence_512/clear_49445_b3_o9_gt17.jpg
